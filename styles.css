@@ -143,7 +143,7 @@ h1 {
 
 .subtitle {
   font-size: clamp(1rem, 2.5vw, 1.3rem);
-  color: var(--accent-green);
+  color: var(--text-secondary);
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.15em;
