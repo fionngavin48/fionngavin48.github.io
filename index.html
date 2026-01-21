@@ -11,6 +11,7 @@
 </head>
 <body>
 <div class="grain"></div>
+<div class="tooltip" id="copyTooltip">Copied to clipboard!</div>
 <div class="container">
   <header>
     <div class="header-content">
@@ -32,7 +33,7 @@
           </svg>
           LinkedIn
         </a>
-        <a href="mailto:fgavin@tcd.ie" class="link-btn">
+        <a href="mailto:fgavin@tcd.ie" class="link-btn email-btn" id="emailBtn">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
             <polyline points="22,6 12,13 2,6"/>
@@ -111,5 +112,30 @@
     </div>
   </footer>
 </div>
+
+<script>
+document.getElementById('emailBtn').addEventListener('click', function(e) {
+  e.preventDefault();
+  
+  // Copy email to clipboard
+  const email = 'fgavin@tcd.ie';
+  navigator.clipboard.writeText(email).then(function() {
+    // Get the tooltip element
+    const tooltip = document.getElementById('copyTooltip');
+    
+    // Position tooltip near mouse pointer
+    tooltip.style.left = e.pageX + 15 + 'px';
+    tooltip.style.top = e.pageY + 15 + 'px';
+    
+    // Show tooltip
+    tooltip.classList.add('show');
+    
+    // Hide tooltip after 2 seconds
+    setTimeout(function() {
+      tooltip.classList.remove('show');
+    }, 2000);
+  });
+});
+</script>
 </body>
 </html>
