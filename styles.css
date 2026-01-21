@@ -9,6 +9,18 @@
   --card-bg: #0f0f0f;
 }
 
+/* Light theme variables */
+body[data-theme="light"] {
+  --bg-primary: #ffffff;
+  --bg-secondary: #f5f5f5;
+  --text-primary: #000000;
+  --text-secondary: #4a4a4a;
+  --accent-green: #2563eb;
+  --accent-cyan: #0891b2;
+  --border-color: #e0e0e0;
+  --card-bg: #fafafa;
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -22,6 +34,7 @@ body {
   line-height: 1.6;
   overflow-x: hidden;
   position: relative;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 /* Grain texture overlay */
@@ -58,6 +71,62 @@ body {
 .tooltip.show {
   opacity: 1;
   transform: translateY(0);
+}
+
+/* Theme toggle button */
+.theme-toggle {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  width: 50px;
+  height: 50px;
+  border: 2px solid var(--border-color);
+  background: var(--card-bg);
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  transition: all 0.3s ease;
+  padding: 0;
+}
+
+.theme-toggle:hover {
+  border-color: var(--accent-green);
+  box-shadow: 0 0 20px rgba(74, 158, 255, 0.3);
+  transform: scale(1.05);
+}
+
+.theme-toggle svg {
+  position: absolute;
+  transition: all 0.3s ease;
+  color: var(--text-primary);
+}
+
+.theme-toggle .sun-icon {
+  opacity: 0;
+  transform: rotate(-90deg) scale(0.8);
+}
+
+.theme-toggle .moon-icon {
+  opacity: 1;
+  transform: rotate(0deg) scale(1);
+}
+
+body[data-theme="light"] .theme-toggle .sun-icon {
+  opacity: 1;
+  transform: rotate(0deg) scale(1);
+}
+
+body[data-theme="light"] .theme-toggle .moon-icon {
+  opacity: 0;
+  transform: rotate(90deg) scale(0.8);
+}
+
+/* Adjust grain for light theme */
+body[data-theme="light"] .grain {
+  opacity: 0.02;
 }
 
 .container {
@@ -101,6 +170,11 @@ h1 {
   display: inline-block;
   color: var(--text-primary);
   text-shadow: 0 0 20px rgba(74, 158, 255, 0.4);
+  transition: text-shadow 0.3s ease;
+}
+
+body[data-theme="light"] h1 {
+  text-shadow: 0 0 20px rgba(37, 99, 235, 0.3);
 }
 
 /* Glitch effect on hover */
@@ -484,6 +558,18 @@ footer {
     padding: 20px;
     padding-left: 25px;
   }
+
+  .theme-toggle {
+    width: 45px;
+    height: 45px;
+    top: 15px;
+    right: 15px;
+  }
+
+  .theme-toggle svg {
+    width: 20px;
+    height: 20px;
+  }
 }
 
 /* Selection color */
@@ -512,5 +598,13 @@ footer {
 }
 
 ::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-green);
+}
+
+body[data-theme="light"] ::-webkit-scrollbar-thumb {
+  background: #d0d0d0;
+}
+
+body[data-theme="light"] ::-webkit-scrollbar-thumb:hover {
   background: var(--accent-green);
 }
