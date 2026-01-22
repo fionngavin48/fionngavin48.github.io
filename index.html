@@ -12,8 +12,29 @@
 <body>
 <div class="grain"></div>
 <div class="tooltip" id="copyTooltip">Copied to clipboard!</div>
-<button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">
-</button>
+
+<!-- Site Settings Dropdown -->
+<div class="site-settings">
+  <button class="settings-toggle" id="settingsToggle" aria-label="Site settings">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <circle cx="12" cy="12" r="3"/>
+      <path d="M12 1v6m0 6v6m5.196-13.928l-4.242 4.242m0 5.656l4.242 4.242M23 12h-6m-6 0H1m18.928-5.196l-4.242 4.242m-5.656 0l-4.242-4.242"/>
+    </svg>
+    <span>Site Settings</span>
+  </button>
+  <div class="settings-dropdown" id="settingsDropdown">
+    <div class="settings-item">
+      <span class="settings-label">Theme</span>
+      <button class="theme-toggle-inline" id="themeToggle" aria-label="Toggle theme">
+        <div class="toggle-track">
+          <div class="toggle-thumb"></div>
+        </div>
+        <span class="theme-text" id="themeText">Dark</span>
+      </button>
+    </div>
+  </div>
+</div>
+
 <div class="container">
   <header>
     <div class="header-content">
@@ -144,22 +165,46 @@ document.getElementById('emailBtn').addEventListener('click', function(e) {
   });
 });
 
+// Site settings dropdown functionality
+const settingsToggle = document.getElementById('settingsToggle');
+const settingsDropdown = document.getElementById('settingsDropdown');
+
+settingsToggle.addEventListener('click', function(e) {
+  e.stopPropagation();
+  settingsDropdown.classList.toggle('show');
+});
+
+// Close dropdown when clicking outside
+document.addEventListener('click', function(e) {
+  if (!settingsToggle.contains(e.target) && !settingsDropdown.contains(e.target)) {
+    settingsDropdown.classList.remove('show');
+  }
+});
+
 // Theme toggle functionality
 const themeToggle = document.getElementById('themeToggle');
+const themeText = document.getElementById('themeText');
 const body = document.body;
 
 // Check for saved theme preference or default to 'dark'
 const currentTheme = localStorage.getItem('theme') || 'dark';
 body.setAttribute('data-theme', currentTheme);
+updateThemeText(currentTheme);
 
 // Toggle theme
-themeToggle.addEventListener('click', function() {
+themeToggle.addEventListener('click', function(e) {
+  e.stopPropagation();
   const currentTheme = body.getAttribute('data-theme');
   const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
   
   body.setAttribute('data-theme', newTheme);
   localStorage.setItem('theme', newTheme);
+  updateThemeText(newTheme);
 });
+
+function updateThemeText(theme) {
+  themeText.textContent = theme === 'dark' ? 'Dark' : 'Light';
+}
 </script>
 </body>
 </html>
