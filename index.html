@@ -16,9 +16,9 @@
 <!-- Site Settings Dropdown -->
 <div class="site-settings">
   <button class="settings-toggle" id="settingsToggle" aria-label="Site settings">
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <circle cx="12" cy="12" r="3"/>
-      <path d="M12 1v6m0 6v6m5.196-13.928l-4.242 4.242m0 5.656l4.242 4.242M23 12h-6m-6 0H1m18.928-5.196l-4.242 4.242m-5.656 0l-4.242-4.242"/>
+      <path d="M12 1v3m0 16v3M4.22 4.22l2.12 2.12m11.32 11.32l2.12 2.12M1 12h3m16 0h3M4.22 19.78l2.12-2.12m11.32-11.32l2.12-2.12"/>
     </svg>
     <span>Site Settings</span>
   </button>
@@ -56,7 +56,7 @@
           </svg>
           LinkedIn
         </a>
-        <a href="mailto:fgavin@tcd.ie" class="link-btn email-btn" id="emailBtn">
+        <a href="/cdn-cgi/l/email-protection#187e7f796e7176586c7b7c36717d" class="link-btn email-btn" id="emailBtn">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
             <polyline points="22,6 12,13 2,6"/>
@@ -127,7 +127,7 @@
       <div class="footer-section">
         <h3 class="footer-title">CONNECT</h3>
         <div class="footer-links">
-          <a href="mailto:fgavin@tcd.ie">fgavin@tcd.ie</a>
+          <a href="/cdn-cgi/l/email-protection#e6808187908f88a6928582c88f83"><span class="__cf_email__" data-cfemail="e88e8f899e8186a89c8b8cc6818d">[email&#160;protected]</span></a>
           <a href="https://github.com/fionngavin48" target="_blank">github.com/fionngavin48</a>
           <a href="https://linkedin.com/in/fionngavin" target="_blank">linkedin.com/in/fionngavin</a>
         </div>
@@ -140,7 +140,7 @@
   </footer>
 </div>
 
-<script>
+<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
 // Email copy functionality
 document.getElementById('emailBtn').addEventListener('click', function(e) {
   e.preventDefault();
@@ -195,16 +195,4 @@ updateThemeText(currentTheme);
 themeToggle.addEventListener('click', function(e) {
   e.stopPropagation();
   const currentTheme = body.getAttribute('data-theme');
-  const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-  
-  body.setAttribute('data-theme', newTheme);
-  localStorage.setItem('theme', newTheme);
-  updateThemeText(newTheme);
-});
-
-function updateThemeText(theme) {
-  themeText.textContent = theme === 'dark' ? 'Dark' : 'Light';
-}
-</script>
-</body>
-</html>
+  const newTheme = currentTheme === 'dark' ? '
