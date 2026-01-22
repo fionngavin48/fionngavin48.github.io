@@ -12,6 +12,8 @@
 <body>
 <div class="grain"></div>
 <div class="tooltip" id="copyTooltip">Copied to clipboard!</div>
+<button class="theme-toggle" id="themeToggle" aria-label="Toggle theme">
+</button>
 
 <!-- Site Settings Dropdown -->
 <div class="site-settings">
@@ -56,7 +58,7 @@
           </svg>
           LinkedIn
         </a>
-        <a href="/cdn-cgi/l/email-protection#187e7f796e7176586c7b7c36717d" class="link-btn email-btn" id="emailBtn">
+        <a href="mailto:fgavin@tcd.ie" class="link-btn email-btn" id="emailBtn">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
             <polyline points="22,6 12,13 2,6"/>
@@ -86,7 +88,7 @@
     </h2>
     <div class="projects-grid">
       <div class="project-card">
-        
+
       <div class="project-header">
         <h3 class="project-title">MY WEBPAGE</h3>
         <div class="project-tags">
@@ -127,7 +129,7 @@
       <div class="footer-section">
         <h3 class="footer-title">CONNECT</h3>
         <div class="footer-links">
-          <a href="/cdn-cgi/l/email-protection#e6808187908f88a6928582c88f83"><span class="__cf_email__" data-cfemail="e88e8f899e8186a89c8b8cc6818d">[email&#160;protected]</span></a>
+          <a href="mailto:fgavin@tcd.ie">fgavin@tcd.ie</a>
           <a href="https://github.com/fionngavin48" target="_blank">github.com/fionngavin48</a>
           <a href="https://linkedin.com/in/fionngavin" target="_blank">linkedin.com/in/fionngavin</a>
         </div>
@@ -140,24 +142,24 @@
   </footer>
 </div>
 
-<script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
+<script>
 // Email copy functionality
 document.getElementById('emailBtn').addEventListener('click', function(e) {
   e.preventDefault();
-  
+
   // Copy email to clipboard
   const email = 'fgavin@tcd.ie';
   navigator.clipboard.writeText(email).then(function() {
     // Get the tooltip element
     const tooltip = document.getElementById('copyTooltip');
-    
+
     // Position tooltip near mouse pointer
     tooltip.style.left = e.pageX + 15 + 'px';
     tooltip.style.top = e.pageY + 15 + 'px';
-    
+
     // Show tooltip
     tooltip.classList.add('show');
-    
+
     // Hide tooltip after 2 seconds
     setTimeout(function() {
       tooltip.classList.remove('show');
@@ -192,7 +194,20 @@ body.setAttribute('data-theme', currentTheme);
 updateThemeText(currentTheme);
 
 // Toggle theme
+themeToggle.addEventListener('click', function() {
 themeToggle.addEventListener('click', function(e) {
   e.stopPropagation();
   const currentTheme = body.getAttribute('data-theme');
-  const newTheme = currentTheme === 'dark' ? '
+  const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+
+  body.setAttribute('data-theme', newTheme);
+  localStorage.setItem('theme', newTheme);
+  updateThemeText(newTheme);
+});
+
+function updateThemeText(theme) {
+  themeText.textContent = theme === 'dark' ? 'Dark' : 'Light';
+}
+</script>
+</body>
+</html>
