@@ -25,7 +25,7 @@ portfolio/
 - **Headers**: Space Mono (Monospace)
 - **Body**: IBM Plex Mono (Monospace)
 
-## ✨ Features Breakdown
+## Features Breakdown
 
 ### Glitch Effect
 Hover over the main heading to see a cyberpunk-style glitch animation that splits the text into multiple colored layers.
@@ -39,18 +39,18 @@ The projects section uses CSS Grid with `auto-fit` and `minmax()` for a responsi
 ### Animation Sequence
 Elements fade in sequentially on page load using staggered animation delays for a polished appearance.
 
-## 📄 License
+## License
 
 This project is open source and available under the [MIT License](LICENSE).
 
-## 👤 Author
+## Author
 
 **Fionn Gavin**
 - GitHub: [@fionngavin48](https://github.com/fionngavin48)
 - LinkedIn: [fionngavin](https://linkedin.com/in/fionngavin)
 - Email: fgavin@tcd.ie
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - Font families from [Google Fonts](https://fonts.google.com/)
 - Icons from inline SVG
