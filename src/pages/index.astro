@@ -1,0 +1,85 @@
+---
+import Base from '../layouts/Base.astro';
+import { getCollection } from 'astro:content';
+import { monthYear } from '../lib/date';
+
+const posts = (await getCollection('blog', ({ data }) => !data.draft)).sort(
+  (a, b) => b.data.publishedAt.valueOf() - a.data.publishedAt.valueOf(),
+);
+const recent = posts.slice(0, 4);
+
+const projects = (await getCollection('projects')).sort((a, b) => a.data.order - b.data.order);
+const featured = projects.filter((p) => p.data.featured);
+---
+
+<Base>
+  <section class="intro">
+    <h1>Fionn Gavin</h1>
+    <p class="lead">
+      I'm a computer science student at
+      <a class="content-link" href="https://www.tcd.ie/" target="_blank" rel="noopener noreferrer">Trinity College Dublin</a>,
+      based in Dublin, Ireland. I work on security and systems.
+    </p>
+    <p>
+      I'm part of the team at
+      <a class="content-link" href="https://www.projecteleven.com" target="_blank" rel="noopener noreferrer">Project&nbsp;Eleven</a>,
+      where we build
+      <a class="content-link" href="https://report.projecteleven.com/" target="_blank" rel="noopener noreferrer">post-quantum</a>
+      cryptography infrastructure.
+    </p>
+    <div class="links">
+      <a href="mailto:fgavin@tcd.ie" data-copy="fgavin@tcd.ie"><span class="arw">✉</span> Email</a>
+      <a href="https://linkedin.com/in/fionngavin" target="_blank" rel="noopener noreferrer"><span class="arw">↗</span> LinkedIn</a>
+      <a href="https://github.com/fionngavin48" target="_blank" rel="noopener noreferrer"><span class="arw">↗</span> GitHub</a>
+      <a href="/contact/#cv"><span class="arw">↓</span> CV</a>
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="section-head">
+      <h2 class="section-title">Writing</h2>
+      {recent.length > 0 && <a class="see-all" href="/writing/">all →</a>}
+    </div>
+    {
+      recent.length > 0 ? (
+        <div class="writing-list">
+          {recent.map((p) => (
+            <a class="post" href={`/writing/${p.id}/`}>
+              <time datetime={p.data.publishedAt.toISOString()}>{monthYear(p.data.publishedAt)}</time>
+              <span class="post-title">{p.data.title}</span>
+            </a>
+          ))}
+        </div>
+      ) : (
+        <p class="empty-state">Coming soon</p>
+      )
+    }
+  </section>
+
+  <section class="block">
+    <div class="section-head">
+      <h2 class="section-title">Projects</h2>
+      <a class="see-all" href="/projects/">all →</a>
+    </div>
+    <div class="projects-list">
+      {
+        featured.map((p) => (
+          <article class="project">
+            <h3>
+              <a
+                class="project-title"
+                href={p.data.writeup ? `/projects/${p.id}/` : (p.data.repo ?? '/projects/')}
+                target={!p.data.writeup && p.data.repo ? '_blank' : undefined}
+                rel={!p.data.writeup && p.data.repo ? 'noopener noreferrer' : undefined}
+              >
+                {p.data.title}
+              </a>
+            </h3>
+            <p>{p.data.summary}</p>
+            <div class="tags">{p.data.tags.map((t) => <span>{t}</span>)}</div>
+          </article>
+        ))
+      }
+    </div>
+  </section>
+</Base>

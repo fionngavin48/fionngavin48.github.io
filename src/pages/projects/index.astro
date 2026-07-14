@@ -1,0 +1,76 @@
+---
+import Base from '../../layouts/Base.astro';
+import { getCollection } from 'astro:content';
+
+const projects = (await getCollection('projects')).sort(
+  (a, b) => a.data.order - b.data.order || b.data.year - a.data.year,
+);
+
+const order = ['security', 'systems', 'web', 'research'] as const;
+const present = order.filter((t) => projects.some((p) => p.data.type === t));
+const filters = ['all', ...present];
+---
+
+<Base title="Projects" description="Things I've built — security, systems, web, and research.">
+  <section class="intro">
+    <h1>Projects</h1>
+    <p class="lead">Things I've built and worked on. Filter by type.</p>
+  </section>
+
+  <section class="block">
+    <div class="filters" role="group" aria-label="Filter projects by type">
+      {
+        filters.map((f, i) => (
+          <button class="chip" data-filter={f} aria-pressed={i === 0 ? 'true' : 'false'}>
+            {f}
+          </button>
+        ))
+      }
+    </div>
+
+    <div class="projects-list">
+      {
+        projects.map((p) => (
+          <article class="project" data-type={p.data.type}>
+            <h3>
+              <a
+                class="project-title"
+                href={p.data.writeup ? `/projects/${p.id}/` : (p.data.repo ?? p.data.paper ?? p.data.demo ?? '#')}
+                target={p.data.writeup ? undefined : '_blank'}
+                rel={p.data.writeup ? undefined : 'noopener noreferrer'}
+              >
+                {p.data.title}
+              </a>
+            </h3>
+            <p>{p.data.summary}</p>
+            <div class="tags">
+              <span>{p.data.year}</span>
+              {p.data.tags.map((t) => <span>{t}</span>)}
+            </div>
+            <div class="project-links">
+              {p.data.writeup && <a href={`/projects/${p.id}/`}>read →</a>}
+              {p.data.repo && <a href={p.data.repo} target="_blank" rel="noopener noreferrer">repo ↗</a>}
+              {p.data.demo && <a href={p.data.demo} target="_blank" rel="noopener noreferrer">demo ↗</a>}
+              {p.data.paper && <a href={p.data.paper} target="_blank" rel="noopener noreferrer">paper ↗</a>}
+            </div>
+          </article>
+        ))
+      }
+    </div>
+  </section>
+
+  <script>
+    const chips = document.querySelectorAll<HTMLButtonElement>('.chip');
+    const projects = document.querySelectorAll<HTMLElement>('.project');
+    document.querySelector('.filters')?.addEventListener('click', (e) => {
+      const chip = (e.target as HTMLElement).closest<HTMLButtonElement>('.chip');
+      if (!chip) return;
+      chips.forEach((c) => c.setAttribute('aria-pressed', String(c === chip)));
+      const f = chip.dataset.filter;
+      projects.forEach((p) => {
+        const show = f === 'all' || p.dataset.type === f;
+        p.toggleAttribute('hidden', !show);
+      });
+    });
+  </script>
+</Base>

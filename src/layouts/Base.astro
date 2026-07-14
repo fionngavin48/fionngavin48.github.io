@@ -1,0 +1,76 @@
+---
+import '@fontsource-variable/geist';
+import '@fontsource-variable/geist-mono';
+import '../styles/global.css';
+import Nav from '../components/Nav.astro';
+import Footer from '../components/Footer.astro';
+
+interface Props {
+  title?: string;
+  description?: string;
+}
+const {
+  title = 'Fionn Gavin',
+  description = 'Computer science student at Trinity College Dublin. I work on security and systems.',
+} = Astro.props;
+
+const fullTitle = title === 'Fionn Gavin' ? title : `${title} — Fionn Gavin`;
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>{fullTitle}</title>
+    <meta name="description" content={description} />
+    <meta property="og:title" content={fullTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content="website" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="sitemap" href="/sitemap-index.xml" />
+  </head>
+  <body>
+    <main>
+      <Nav />
+      <slot />
+      <Footer />
+    </main>
+    <div class="copy-toast" id="copyToast" role="status" aria-live="polite">Copied!</div>
+    <script>
+      const toast = document.getElementById('copyToast');
+      let hideTimer = 0;
+
+      document.addEventListener('click', async (event) => {
+        const target = event.target instanceof Element
+          ? event.target.closest('[data-copy]')
+          : null;
+        if (!(target instanceof HTMLElement)) return;
+
+        const value = target.getAttribute('data-copy');
+        if (!value) return;
+
+        event.preventDefault();
+
+        try {
+          await navigator.clipboard.writeText(value);
+        } catch {
+          return;
+        }
+
+        if (!(toast instanceof HTMLElement)) return;
+
+        const offset = 14;
+        const maxLeft = window.innerWidth - toast.offsetWidth - 12;
+        toast.style.left = `${Math.max(12, Math.min(event.clientX + offset, maxLeft))}px`;
+        toast.style.top = `${Math.min(event.clientY + offset, window.innerHeight - 40)}px`;
+        toast.classList.add('is-visible');
+
+        window.clearTimeout(hideTimer);
+        hideTimer = window.setTimeout(() => {
+          toast.classList.remove('is-visible');
+        }, 1800);
+      });
+    </script>
+  </body>
+</html>
