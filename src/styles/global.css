@@ -109,9 +109,24 @@ main {
   margin-bottom: 22px;
 }
 .section-title { font-size: 1.1rem; }
+.section-title a {
+  color: inherit;
+  transition: color .15s ease;
+}
+.section-title a:hover { color: var(--accent); }
 .block > .lead { margin-top: 14px; max-width: 60ch; }
 .see-all { font-family: var(--font-mono); font-size: .78rem; color: var(--muted); transition: color .15s ease; }
 .see-all:hover { color: var(--accent); }
+
+.exp-more { margin-top: 18px; }
+
+a.company-link {
+  color: var(--text);
+  font-weight: 600;
+  text-decoration: none;
+  transition: color .15s ease;
+}
+a.company-link:hover { color: var(--accent); }
 
 .empty-state {
   font-family: var(--font-mono);

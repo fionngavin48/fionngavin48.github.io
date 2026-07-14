@@ -15,17 +15,10 @@ const featured = projects.filter((p) => p.data.featured);
 <Base>
   <section class="intro">
     <h1>Fionn Gavin</h1>
-    <p class="lead">
+    <p>
       I'm a computer science student at
       <a class="content-link" href="https://www.tcd.ie/" target="_blank" rel="noopener noreferrer">Trinity College Dublin</a>,
       based in Dublin, Ireland. I work on security and systems.
-    </p>
-    <p>
-      I'm part of the team at
-      <a class="content-link" href="https://www.projecteleven.com" target="_blank" rel="noopener noreferrer">Project&nbsp;Eleven</a>,
-      where we build
-      <a class="content-link" href="https://report.projecteleven.com/" target="_blank" rel="noopener noreferrer">post-quantum</a>
-      cryptography infrastructure.
     </p>
     <div class="links">
       <a href="mailto:fgavin@tcd.ie" data-copy="fgavin@tcd.ie"><span class="arw">✉</span> Email</a>
@@ -37,7 +30,21 @@ const featured = projects.filter((p) => p.data.featured);
 
   <section class="block">
     <div class="section-head">
-      <h2 class="section-title">Writing</h2>
+      <h2 class="section-title"><a href="/about/">Experience</a></h2>
+    </div>
+    <p>
+      I'm part of the team at
+      <a class="content-link" href="https://www.projecteleven.com" target="_blank" rel="noopener noreferrer">Project&nbsp;Eleven</a>,
+      where we build
+      <a class="content-link" href="https://report.projecteleven.com/" target="_blank" rel="noopener noreferrer">post-quantum</a>
+      cryptography infrastructure.
+    </p>
+    <p class="exp-more">See my <a class="content-link" href="/about/">experience</a>.</p>
+  </section>
+
+  <section class="block">
+    <div class="section-head">
+      <h2 class="section-title"><a href="/writing/">Writing</a></h2>
       {recent.length > 0 && <a class="see-all" href="/writing/">all →</a>}
     </div>
     {
@@ -58,7 +65,7 @@ const featured = projects.filter((p) => p.data.featured);
 
   <section class="block">
     <div class="section-head">
-      <h2 class="section-title">Projects</h2>
+      <h2 class="section-title"><a href="/projects/">Projects</a></h2>
       <a class="see-all" href="/projects/">all →</a>
     </div>
     <div class="projects-list">
