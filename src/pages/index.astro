@@ -15,35 +15,45 @@ const featured = projects.filter((p) => p.data.featured);
 <Base>
   <section class="intro">
     <h1>Fionn Gavin</h1>
-    <p class="lead">Computer science student at Trinity College Dublin. I work on security and systems.</p>
+    <p class="lead">
+      I'm a computer science student at
+      <a class="content-link" href="https://www.tcd.ie/" target="_blank" rel="noopener noreferrer">Trinity College Dublin</a>,
+      based in Dublin, Ireland. I work on security and systems.
+    </p>
     <p>
       I'm part of the team at
       <a class="content-link" href="https://www.projecteleven.com" target="_blank" rel="noopener noreferrer">Project&nbsp;Eleven</a>,
-      where we build post-quantum cryptography infrastructure. I write notes on what I read and build below.
+      where we build
+      <a class="content-link" href="https://report.projecteleven.com/" target="_blank" rel="noopener noreferrer">post-quantum</a>
+      cryptography infrastructure.
     </p>
     <div class="links">
-      <a href="https://github.com/fionngavin48" target="_blank" rel="noopener noreferrer"><span class="arw">↗</span> GitHub</a>
+      <a href="mailto:fgavin@tcd.ie" data-copy="fgavin@tcd.ie"><span class="arw">✉</span> Email</a>
       <a href="https://linkedin.com/in/fionngavin" target="_blank" rel="noopener noreferrer"><span class="arw">↗</span> LinkedIn</a>
-      <a href="mailto:fgavin@tcd.ie"><span class="arw">✉</span> Email</a>
-      <a href="/cv.pdf"><span class="arw">↓</span> CV</a>
+      <a href="https://github.com/fionngavin48" target="_blank" rel="noopener noreferrer"><span class="arw">↗</span> GitHub</a>
+      <a href="/contact/#cv"><span class="arw">↓</span> CV</a>
     </div>
   </section>
 
   <section class="block">
     <div class="section-head">
       <h2 class="section-title">Writing</h2>
-      <a class="see-all" href="/writing/">all →</a>
+      {recent.length > 0 && <a class="see-all" href="/writing/">all →</a>}
     </div>
-    <div class="writing-list">
-      {
-        recent.map((p) => (
-          <a class="post" href={`/writing/${p.id}/`}>
-            <time datetime={p.data.publishedAt.toISOString()}>{monthYear(p.data.publishedAt)}</time>
-            <span class="post-title">{p.data.title}</span>
-          </a>
-        ))
-      }
-    </div>
+    {
+      recent.length > 0 ? (
+        <div class="writing-list">
+          {recent.map((p) => (
+            <a class="post" href={`/writing/${p.id}/`}>
+              <time datetime={p.data.publishedAt.toISOString()}>{monthYear(p.data.publishedAt)}</time>
+              <span class="post-title">{p.data.title}</span>
+            </a>
+          ))}
+        </div>
+      ) : (
+        <p class="empty-state">Coming soon</p>
+      )
+    }
   </section>
 
   <section class="block">

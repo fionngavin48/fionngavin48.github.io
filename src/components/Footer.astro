@@ -1,16 +1,20 @@
 ---
 const year = new Date().getFullYear();
 const links = [
-  { href: 'https://github.com/fionngavin48', label: 'GitHub', ext: true },
+  { href: 'mailto:fgavin@tcd.ie', label: 'Email', ext: false, copy: 'fgavin@tcd.ie' },
   { href: 'https://linkedin.com/in/fionngavin', label: 'LinkedIn', ext: true },
-  { href: 'mailto:fgavin@tcd.ie', label: 'Email', ext: false },
-  { href: '/rss.xml', label: 'RSS', ext: false },
+  { href: 'https://github.com/fionngavin48', label: 'GitHub', ext: true },
 ];
 ---
 <footer class="site-footer">
   <div class="footer-links">
     {links.map((l) => (
-      <a href={l.href} target={l.ext ? '_blank' : undefined} rel={l.ext ? 'noopener noreferrer' : undefined}>{l.label}</a>
+      <a
+        href={l.href}
+        target={l.ext ? '_blank' : undefined}
+        rel={l.ext ? 'noopener noreferrer' : undefined}
+        data-copy={l.copy}
+      >{l.label}</a>
     ))}
   </div>
   <div class="footer-meta">© {year} Fionn Gavin · Dublin, Ireland</div>

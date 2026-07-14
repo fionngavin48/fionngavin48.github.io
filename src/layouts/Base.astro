@@ -29,7 +29,6 @@ const fullTitle = title === 'Fionn Gavin' ? title : `${title} — Fionn Gavin`;
     <meta property="og:type" content="website" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <link rel="sitemap" href="/sitemap-index.xml" />
-    <link rel="alternate" type="application/rss+xml" title="Fionn Gavin" href="/rss.xml" />
   </head>
   <body>
     <main>
@@ -37,5 +36,41 @@ const fullTitle = title === 'Fionn Gavin' ? title : `${title} — Fionn Gavin`;
       <slot />
       <Footer />
     </main>
+    <div class="copy-toast" id="copyToast" role="status" aria-live="polite">Copied!</div>
+    <script>
+      const toast = document.getElementById('copyToast');
+      let hideTimer = 0;
+
+      document.addEventListener('click', async (event) => {
+        const target = event.target instanceof Element
+          ? event.target.closest('[data-copy]')
+          : null;
+        if (!(target instanceof HTMLElement)) return;
+
+        const value = target.getAttribute('data-copy');
+        if (!value) return;
+
+        event.preventDefault();
+
+        try {
+          await navigator.clipboard.writeText(value);
+        } catch {
+          return;
+        }
+
+        if (!(toast instanceof HTMLElement)) return;
+
+        const offset = 14;
+        const maxLeft = window.innerWidth - toast.offsetWidth - 12;
+        toast.style.left = `${Math.max(12, Math.min(event.clientX + offset, maxLeft))}px`;
+        toast.style.top = `${Math.min(event.clientY + offset, window.innerHeight - 40)}px`;
+        toast.classList.add('is-visible');
+
+        window.clearTimeout(hideTimer);
+        hideTimer = window.setTimeout(() => {
+          toast.classList.remove('is-visible');
+        }, 1800);
+      });
+    </script>
   </body>
 </html>

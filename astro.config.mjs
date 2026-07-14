@@ -4,7 +4,7 @@ import sitemap from '@astrojs/sitemap';
 
 // https://astro.build
 export default defineConfig({
-  site: 'https://fionngavin48.github.io',
+  site: 'https://fionngavin.dev',
   integrations: [mdx(), sitemap()],
   markdown: {
     shikiConfig: {

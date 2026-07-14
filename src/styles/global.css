@@ -1,6 +1,6 @@
 /* ============================================================
    Fionn Gavin — design tokens & base styles
-   Brand: clay accent, Geist type, warm-neutral, system light/dark.
+   Brand: rose accent, Geist type, warm-neutral, system light/dark.
    Never pure #000/#fff. No shadows/glow/grain. Motion = color only.
    ============================================================ */
 
@@ -18,8 +18,8 @@
   --muted:       #6E6E68;
   --subtle:      #9C9C95;
   --border:      #E7E7E2;
-  --accent:      #A2634E; /* clay — links, active, hover */
-  --accent-soft: #F1E7E1; /* pastel fill — chips, selection */
+  --accent:      #9B5F6A; /* rose — links, active, hover */
+  --accent-soft: #F3E7EA; /* pastel fill — chips, selection */
 }
 
 @media (prefers-color-scheme: dark) {
@@ -31,8 +31,8 @@
     --muted:       #9A9C9C;
     --subtle:      #66686A;
     --border:      #26282A;
-    --accent:      #D6A38C;
-    --accent-soft: #2E241E;
+    --accent:      #D8A9B2;
+    --accent-soft: #2E2024;
   }
 }
 
@@ -97,7 +97,7 @@ main {
 .intro { margin-bottom: 56px; }
 .intro h1 { font-size: 1.9rem; margin-bottom: 18px; }
 .intro p { margin-bottom: 14px; max-width: 60ch; }
-.intro p.lead { color: var(--muted); }
+.lead { color: var(--muted); }
 
 .content-link { color: var(--accent); transition: color .15s ease; }
 .content-link:hover {
@@ -123,8 +123,15 @@ main {
   margin-bottom: 22px;
 }
 .section-title { font-size: 1.1rem; }
+.block > .lead { margin-top: 14px; max-width: 60ch; }
 .see-all { font-family: var(--font-mono); font-size: .78rem; color: var(--muted); transition: color .15s ease; }
 .see-all:hover { color: var(--accent); }
+
+.empty-state {
+  font-family: var(--font-mono);
+  font-size: .85rem;
+  color: var(--subtle);
+}
 
 /* ---------- writing list ---------- */
 .writing-list { display: flex; flex-direction: column; gap: 14px; }
@@ -185,6 +192,21 @@ main {
 .prose th, .prose td { padding: .6em .9em; border: 1px solid var(--border); text-align: left; }
 .prose th { background: var(--surface); font-weight: 600; }
 
+.prose .skills-langs {
+  color: var(--muted);
+  font-size: .95rem;
+  margin-top: .55em;
+}
+
+.prose a.company-link {
+  color: var(--text);
+  text-decoration: none;
+  transition: color .15s ease;
+}
+.prose a.company-link:hover {
+  color: var(--accent);
+}
+
 /* Shiki dual-theme: apply dark token colors in dark mode */
 @media (prefers-color-scheme: dark) {
   .astro-code, .astro-code span {
@@ -207,6 +229,23 @@ main {
 .footer-links a { color: var(--muted); transition: color .15s ease; }
 .footer-links a:hover { color: var(--accent); }
 .footer-meta { font-family: var(--font-mono); font-size: .76rem; color: var(--subtle); }
+
+/* ---------- copy toast ---------- */
+.copy-toast {
+  position: fixed;
+  z-index: 50;
+  font-family: var(--font-mono);
+  font-size: .68rem;
+  color: var(--muted);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 8px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .15s ease;
+}
+.copy-toast.is-visible { opacity: 1; }
 
 @media (max-width: 560px) {
   main { padding: 52px 22px 32px; }

@@ -8,22 +8,26 @@ const posts = (await getCollection('blog', ({ data }) => !data.draft)).sort(
 );
 ---
 
-<Base title="Writing" description="Notes on security, systems, and what I'm reading.">
+<Base title="Writing" description="My blogs and notes. Security, systems, and what I'm working on.">
   <section class="intro">
     <h1>Writing</h1>
-    <p class="lead">Notes on security, systems, and what I'm reading.</p>
+    <p class="lead">My blogs and notes. Security, systems, and what I'm working on.</p>
   </section>
 
   <section class="block">
-    <div class="writing-list">
-      {
-        posts.map((p) => (
-          <a class="post" href={`/writing/${p.id}/`}>
-            <time datetime={p.data.publishedAt.toISOString()}>{monthYear(p.data.publishedAt)}</time>
-            <span class="post-title">{p.data.title}</span>
-          </a>
-        ))
-      }
-    </div>
+    {
+      posts.length > 0 ? (
+        <div class="writing-list">
+          {posts.map((p) => (
+            <a class="post" href={`/writing/${p.id}/`}>
+              <time datetime={p.data.publishedAt.toISOString()}>{monthYear(p.data.publishedAt)}</time>
+              <span class="post-title">{p.data.title}</span>
+            </a>
+          ))}
+        </div>
+      ) : (
+        <p class="empty-state">Coming soon</p>
+      )
+    }
   </section>
 </Base>
