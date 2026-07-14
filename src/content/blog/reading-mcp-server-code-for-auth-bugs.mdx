@@ -1,0 +1,28 @@
+---
+title: "Reading MCP server code for auth bugs"
+description: "A quick method for finding missing access-control checks when you open a new codebase."
+publishedAt: 2026-06-18
+tags: ["security", "notes"]
+---
+
+Most access-control bugs are not clever. They are a missing check on a path someone forgot existed. So the first thing I do with a new server is map every route to the guard that protects it.
+
+## Start from the routes
+
+In this codebase the guard is a decorator, `@require_scope`. Grepping for handlers that *lack* it is a fast way to find the gaps:
+
+```bash
+# flag routes that define a handler but no scope guard
+grep -rL "@require_scope" app/routes/ \
+  | xargs grep -l "@router"
+```
+
+Two files came back. Both were internal tools nobody had touched in months — exactly where this kind of thing hides.
+
+## Why it works
+
+A scanner that understands *intent* is hard. A scanner that checks "every route has exactly one guard" is easy, and it catches the boring bugs that actually ship. Start boring, then get clever.
+
+> The most common vulnerability is the check that was never written.
+
+More on this when the IBM project write-up lands.
