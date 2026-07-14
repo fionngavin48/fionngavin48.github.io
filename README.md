@@ -1,8 +1,8 @@
 # fionngavin.dev
 
-My personal site. Live at [fionngavin.dev](https://fionngavin.dev).
+My personal site. Live at [fionngavin.dev](https://fionngavin.dev)
 
-Built with [Astro](https://astro.build).
+Built with [Astro](https://astro.build)
 
 ## Stack
 
