@@ -1,6 +1,6 @@
 /* ============================================================
    Fionn Gavin — design tokens & base styles
-   Brand: rose accent, Geist type, warm-neutral, system light/dark.
+   Brand: rose accent, Geist type, warm-neutral. Light only.
    Never pure #000/#fff. No shadows/glow/grain. Motion = color only.
    ============================================================ */
 
@@ -11,7 +11,7 @@
   --maxw: 660px;
   --measure: 65ch;
 
-  /* Light (default) — warm off-white */
+  /* Light — warm off-white */
   --bg:          #FAFAF8;
   --surface:     #F2F2EF;
   --text:        #23231F;
@@ -22,25 +22,11 @@
   --accent-soft: #F3E7EA; /* pastel fill — chips, selection */
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    /* Dark — warm charcoal */
-    --bg:          #0E0F10;
-    --surface:     #17191A;
-    --text:        #E9E8E3;
-    --muted:       #9A9C9C;
-    --subtle:      #66686A;
-    --border:      #26282A;
-    --accent:      #D8A9B2;
-    --accent-soft: #2E2024;
-  }
-}
-
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 html {
   font-size: 18px;
-  color-scheme: light dark;
+  color-scheme: only light;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
@@ -207,13 +193,7 @@ main {
   color: var(--accent);
 }
 
-/* Shiki dual-theme: apply dark token colors in dark mode */
-@media (prefers-color-scheme: dark) {
-  .astro-code, .astro-code span {
-    color: var(--shiki-dark) !important;
-    background-color: var(--shiki-dark-bg) !important;
-  }
-}
+/* Shiki: light theme only */
 
 /* ---------- article header ---------- */
 .article-head { margin-bottom: 40px; }

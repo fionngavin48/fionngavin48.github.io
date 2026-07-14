@@ -8,9 +8,7 @@ export default defineConfig({
   integrations: [mdx(), sitemap()],
   markdown: {
     shikiConfig: {
-      // Dual theme: light by default, dark via prefers-color-scheme (see global.css).
-      themes: { light: 'github-light', dark: 'github-dark' },
-      defaultColor: false,
+      theme: 'github-light',
       wrap: false,
     },
   },
