@@ -1,8 +1,8 @@
 # fionngavin.dev
 
-Personal site of [Fionn Gavin](https://fionngavin.dev) — computer science student at Trinity College Dublin, working on security and systems.
+My personal site. Live at [fionngavin.dev](https://fionngavin.dev).
 
-Built with [Astro](https://astro.build). Live at [fionngavin.dev](https://fionngavin.dev).
+Built with [Astro](https://astro.build).
 
 ## Stack
 
