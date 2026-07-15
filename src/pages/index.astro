@@ -13,12 +13,18 @@ const featured = projects.filter((p) => p.data.featured);
 ---
 
 <Base>
+<div class="page-sections">
   <section class="intro">
     <h1>Fionn Gavin</h1>
     <p>
       I'm a computer science student at
       <a class="content-link" href="https://www.tcd.ie/" target="_blank" rel="noopener noreferrer">Trinity College Dublin</a>,
-      based in Dublin, Ireland. I work on security and systems.
+      based in Dublin, Ireland. I work at
+      <a class="content-link" href="https://www.projecteleven.com" target="_blank" rel="noopener noreferrer">Project&nbsp;Eleven</a>
+      on post-quantum cryptography infrastructure.
+    </p>
+    <p>
+      I'm interested in understanding how things break, and how to build them so they don't.
     </p>
     <div class="links">
       <a href="mailto:fgavin@tcd.ie" data-copy="fgavin@tcd.ie"><span class="arw">✉</span> Email</a>
@@ -28,42 +34,35 @@ const featured = projects.filter((p) => p.data.featured);
     </div>
   </section>
 
-  <section class="block">
-    <div class="section-head">
-      <h2 class="section-title"><a href="/about/">Experience</a></h2>
+  <section class="block" id="experience">
+    <h2 class="section-title">Experience</h2>
+    <div class="prose home-prose">
+      <ul class="experience-list">
+        <li>
+          <div>
+            <strong><a class="company-link" href="https://www.projecteleven.com" target="_blank" rel="noopener noreferrer">Project Eleven</a></strong>: research, engineering, authoring, building
+            <a href="https://report.projecteleven.com/" target="_blank" rel="noopener noreferrer">post-quantum</a>
+            cryptography infrastructure.
+          </div>
+          <div class="tags"><span>cryptography</span><span>research</span><span>engineering</span></div>
+        </li>
+        <li>
+          <div>
+            <strong><a class="company-link" href="https://www.ibm.com" target="_blank" rel="noopener noreferrer">IBM</a></strong>: collaborative software engineering project, security validation for MCP.
+          </div>
+          <div class="tags"><span>security</span><span>python</span><span>mcp</span></div>
+        </li>
+        <li>
+          <div>
+            <strong><a class="company-link" href="https://www.nccgroup.com" target="_blank" rel="noopener noreferrer">NCC Group</a></strong>: cybersecurity and pentesting.
+          </div>
+          <div class="tags"><span>pentesting</span><span>osint</span><span>metasploit</span><span>nmap</span></div>
+        </li>
+      </ul>
     </div>
-    <p>
-      I'm part of the team at
-      <a class="content-link" href="https://www.projecteleven.com" target="_blank" rel="noopener noreferrer">Project&nbsp;Eleven</a>,
-      where we build
-      <a class="content-link" href="https://report.projecteleven.com/" target="_blank" rel="noopener noreferrer">post-quantum</a>
-      cryptography infrastructure.
-    </p>
-    <p class="exp-more">See my <a class="content-link" href="/about/">experience</a>.</p>
   </section>
 
-  <section class="block">
-    <div class="section-head">
-      <h2 class="section-title"><a href="/writing/">Writing</a></h2>
-      {recent.length > 0 && <a class="see-all" href="/writing/">all →</a>}
-    </div>
-    {
-      recent.length > 0 ? (
-        <div class="writing-list">
-          {recent.map((p) => (
-            <a class="post" href={`/writing/${p.id}/`}>
-              <time datetime={p.data.publishedAt.toISOString()}>{monthYear(p.data.publishedAt)}</time>
-              <span class="post-title">{p.data.title}</span>
-            </a>
-          ))}
-        </div>
-      ) : (
-        <p class="empty-state">Coming soon</p>
-      )
-    }
-  </section>
-
-  <section class="block">
+  <section class="block" id="projects">
     <div class="section-head">
       <h2 class="section-title"><a href="/projects/">Projects</a></h2>
       <a class="see-all" href="/projects/">all →</a>
@@ -89,4 +88,55 @@ const featured = projects.filter((p) => p.data.featured);
       }
     </div>
   </section>
+
+  <section class="block" id="writing">
+    <div class="section-head">
+      <h2 class="section-title"><a href="/writing/">Writing</a></h2>
+      {recent.length > 0 && <a class="see-all" href="/writing/">all →</a>}
+    </div>
+    {
+      recent.length > 0 ? (
+        <div class="writing-list">
+          {recent.map((p) => (
+            <a class="post" href={`/writing/${p.id}/`}>
+              <time datetime={p.data.publishedAt.toISOString()}>{monthYear(p.data.publishedAt)}</time>
+              <span class="post-title">{p.data.title}</span>
+            </a>
+          ))}
+        </div>
+      ) : (
+        <p class="muted-copy">
+          See my
+          <a class="content-link" href="/writing/#articles">articles</a>
+          and
+          <a class="content-link" href="/writing/#papers">papers</a>.
+        </p>
+      )
+    }
+  </section>
+
+  <section class="block" id="education">
+    <h2 class="section-title">Education</h2>
+    <div class="prose home-prose">
+      <ul>
+        <li>
+          <strong>Trinity College Dublin</strong>: currently studying
+          <a href="https://www.tcd.ie/courses/undergraduate/courses/computer-science/" target="_blank" rel="noopener noreferrer">Integrated Computer Science</a>
+          B.A. (Mod.) Honours in Computer Science / Masters in Computer Science (M.C.S.).
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="block" id="skills">
+    <h2 class="section-title">Skills</h2>
+    <div class="prose home-prose">
+      <p>Cryptography, systems security, systems programming.</p>
+      <p class="skills-more">See my <a href="/projects/">projects</a>.</p>
+      <div class="tags">
+        <span>Python</span><span>Java</span><span>C</span><span>R</span><span>JavaScript</span><span>HTML</span><span>Assembly</span><span>Git</span>
+      </div>
+    </div>
+  </section>
+</div>
 </Base>
