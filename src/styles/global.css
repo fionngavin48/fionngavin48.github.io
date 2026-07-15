@@ -172,13 +172,7 @@ a.company-link:hover { color: var(--accent); }
 .post:hover .post-title { color: var(--accent); }
 
 /* ---------- projects ---------- */
-.projects-page > .intro {
-  border-bottom: none;
-  padding-bottom: 0;
-  margin-bottom: calc(28px + 1.7em);
-}
 .projects-page > .intro p:last-child { margin-bottom: 0; }
-.projects-page > .block { padding-top: 0; }
 .projects-toolbar { margin-bottom: 28px; }
 .projects-page .filters { margin-bottom: 10px; }
 .projects-page .project-search-label { margin-bottom: 0; }
