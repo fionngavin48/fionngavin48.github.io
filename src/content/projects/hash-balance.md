@@ -1,6 +1,6 @@
 ---
 title: "Hash Balance"
-summary: "Interactive chi-squared test for hash bucket uniformity — spot bias in sharding, hash tables, and custom reducers."
+summary: "Testing tool for distribution bias in hash function outputs. Chi-squared goodness-of-fit against any bytes→int callable, simulating real sharding scenarios. Configurable sample sizes, bucket counts, and input patterns."
 type: "research"
 year: 2026
 tags: ["python", "statistics"]
