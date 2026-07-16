@@ -9,7 +9,7 @@ const posts = (await getCollection('blog', ({ data }) => !data.draft)).sort(
 const recent = posts.slice(0, 4);
 
 const projects = (await getCollection('projects')).sort((a, b) => a.data.order - b.data.order);
-const featured = projects.filter((p) => p.data.featured);
+const featured = projects.filter((p) => p.data.featured).slice(0, 3);
 ---
 
 <Base>
@@ -132,7 +132,7 @@ const featured = projects.filter((p) => p.data.featured);
     <h2 class="section-title">Skills</h2>
     <div class="prose home-prose">
       <p>Cryptography, systems security, systems programming.</p>
-      <p class="skills-more">See my <a href="/projects/">projects</a>.</p>
+      <p class="skills-more muted-copy">See my <a class="content-link" href="/projects/">projects</a>.</p>
       <div class="tags">
         <span>Python</span><span>Java</span><span>C</span><span>R</span><span>JavaScript</span><span>HTML</span><span>Assembly</span><span>Git</span>
       </div>

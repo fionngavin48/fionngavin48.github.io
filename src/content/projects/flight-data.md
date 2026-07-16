@@ -5,7 +5,7 @@ type: "systems"
 year: 2025
 tags: ["java", "processing"]
 repo: "https://github.com/kearnsj5/flight-data-project"
-featured: true
+featured: false
 writeup: false
-order: 2
+order: 4
 ---

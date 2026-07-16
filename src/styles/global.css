@@ -255,7 +255,7 @@ a.company-link:hover { color: var(--accent); }
 .prose th, .prose td { padding: .6em .9em; border: 1px solid var(--border); text-align: left; }
 .prose th { background: var(--surface); font-weight: 600; }
 
-.prose p.skills-more { margin-top: .45em; }
+.prose p.skills-more { margin-top: .45em; color: var(--muted); }
 .prose .tags { margin-top: .55em; }
 
 .prose a.company-link {
