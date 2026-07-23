@@ -8,10 +8,12 @@ import Footer from '../components/Footer.astro';
 interface Props {
   title?: string;
   description?: string;
+  wide?: boolean;
 }
 const {
   title = 'Fionn Gavin',
   description = 'Computer science student at Trinity College Dublin. I work on security and systems.',
+  wide = false,
 } = Astro.props;
 
 const fullTitle = title === 'Fionn Gavin' ? title : `${title} — Fionn Gavin`;
@@ -32,7 +34,7 @@ const fullTitle = title === 'Fionn Gavin' ? title : `${title} — Fionn Gavin`;
     <link rel="sitemap" href="/sitemap-index.xml" />
   </head>
   <body>
-    <main>
+    <main class:list={{ 'main-wide': wide }}>
       <Nav />
       <slot />
       <Footer />

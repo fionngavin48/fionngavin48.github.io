@@ -62,6 +62,10 @@ main {
   padding: 76px 28px 40px;
 }
 
+main.main-wide {
+  max-width: 1080px;
+}
+
 /* ---------- top bar ---------- */
 .topbar {
   display: flex;
@@ -162,14 +166,19 @@ a.company-link:hover { color: var(--accent); }
 .writing-sections > section + section { margin-top: 40px; }
 
 /* ---------- writing list ---------- */
-.writing-list { display: flex; flex-direction: column; gap: 14px; }
-.post { display: flex; gap: 18px; align-items: baseline; }
-.post time {
-  font-family: var(--font-mono); font-size: .78rem; color: var(--subtle);
-  font-variant-numeric: tabular-nums; flex-shrink: 0; min-width: 66px;
+.writing-list { display: flex; flex-direction: column; gap: 18px; }
+.post { display: flex; flex-direction: column; gap: 4px; }
+.post-title {
+  color: var(--text);
+  transition: color .15s ease;
+  line-height: 1.35;
 }
-.post .post-title { color: var(--text); transition: color .15s ease; }
 .post:hover .post-title { color: var(--accent); }
+.post-meta {
+  font-family: var(--font-mono);
+  font-size: .78rem;
+  color: var(--subtle);
+}
 
 /* ---------- projects ---------- */
 .projects-page > .intro p:last-child { margin-bottom: 0; }
@@ -237,7 +246,8 @@ a.company-link:hover { color: var(--accent); }
 .prose ul { list-style: disc; }
 .prose ol { list-style: decimal; }
 .prose li + li { margin-top: .4em; }
-.prose a { color: var(--accent); text-decoration: none; }
+.prose a { color: var(--accent); text-decoration: none; font-weight: inherit; }
+.prose a:hover { text-decoration: underline; }
 .prose blockquote { border-left: 3px solid var(--border); padding-left: 1.1em; color: var(--muted); font-style: italic; }
 .prose hr { border: none; border-top: 1px solid var(--border); margin: 2.4em 0; }
 .prose code:not(pre code) {
@@ -270,12 +280,102 @@ a.company-link:hover { color: var(--accent); }
 /* Shiki: light theme only */
 
 /* ---------- article header ---------- */
-.article-head { margin-bottom: 40px; }
+.article-head { margin-bottom: 24px; }
 .article-head h1 { font-size: 1.7rem; margin-bottom: 10px; }
 .article-meta { font-family: var(--font-mono); font-size: .78rem; color: var(--subtle); }
 .project-summary { color: var(--muted); max-width: 60ch; margin-bottom: 32px; }
 .back-link { font-family: var(--font-mono); font-size: .8rem; color: var(--muted); transition: color .15s ease; display: inline-block; margin-bottom: 40px; }
 .back-link:hover { color: var(--accent); }
+
+/* ---------- article layout & toc dropdown ---------- */
+.article-layout {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: 48px;
+  align-items: start;
+}
+
+.article-toc-dropdown {
+  position: sticky;
+  top: 24px;
+}
+
+.article-toc-trigger {
+  list-style: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: .72rem;
+  font-weight: 500;
+  color: var(--subtle);
+  cursor: pointer;
+  user-select: none;
+}
+
+.article-toc-trigger::-webkit-details-marker { display: none; }
+
+.article-toc-trigger::after {
+  content: '';
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid var(--subtle);
+  transition: transform .15s ease;
+}
+
+.article-toc-dropdown[open] .article-toc-trigger::after {
+  transform: rotate(180deg);
+}
+
+.article-toc-trigger:hover {
+  color: var(--accent);
+}
+
+.article-toc-dropdown[open] .article-toc-trigger:hover::after,
+.article-toc-trigger:hover::after {
+  border-top-color: var(--accent);
+}
+
+.article-toc-nav {
+  margin-top: 12px;
+}
+
+.article-toc-nav ul {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.article-toc-nav a {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: .68rem;
+  line-height: 1.5;
+  color: var(--subtle);
+  transition: color .15s ease;
+}
+
+.article-toc-nav a:hover {
+  color: var(--accent);
+}
+
+@media (max-width: 900px) {
+  .article-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .article-toc-dropdown {
+    position: static;
+    margin-bottom: 24px;
+  }
+}
+
+.article-prose > p:first-of-type {
+  color: var(--muted);
+}
 
 /* ---------- footer ---------- */
 .site-footer { border-top: 1px solid var(--border); padding-top: 26px; margin-top: 72px; }

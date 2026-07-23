@@ -1,0 +1,1064 @@
+---
+title: "An Introduction to Cryptography and the Post-Quantum Migration"
+description: "An introduction to classical and post-quantum cryptography from first principles — from AES and RSA to Shor's algorithm and NIST's new PQC standards."
+publishedAt: 2026-07-01
+author: "Fionn Gavin"
+readingTime: "~75 min read"
+draft: false
+tags: ["cryptography", "post-quantum", "security"]
+---
+
+An introduction to classical and post-quantum cryptography from first principles. Everything I learned during onboarding as an intern at Project Eleven, from AES and RSA to Shor's algorithm and [NIST's](https://csrc.nist.gov/pubs/fips/203/final), [new](https://csrc.nist.gov/pubs/fips/204/final), [PQC](https://csrc.nist.gov/pubs/fips/205/final) standards.
+
+## Introduction
+
+The cryptography securing your private messages, the signing key in your wallet, and almost all security infrastructure online needs to be replaced. But why?
+
+The classical cryptography used on the internet today relies on mathematical problems that classical computers cannot solve efficiently. Cryptographically relevant quantum computers(**CRQCs**) change that.
+
+The necessary migration to post-quantum cryptography needs to happen before **Q-Day**, the moment a CRQC arrives. Before we can talk about that migration, we need to understand the cryptography we are migrating from. This report is roughly divided into two parts. Sections 1 to 4 build an understanding of the classical cryptography we rely on today. The rest of this report, from Section 5 onwards, covers the quantum threat and the migration to post-quantum cryptography.
+
+---
+
+## 1. Cryptography
+
+At its core, cryptography is a set of tools for keeping secrets (**confidentiality**), proving things haven't been changed (**integrity**), and confirming who someone is (**authentication**).
+
+We call these tools **primitives**: the atomic cryptographic algorithms that **protocols** like TLS or Signal are built from. For clarity, in this report we will use algorithm and scheme interchangeably (although a scheme is technically a bundle of cryptographic algorithms working together). These protocols are simply the list of steps one or more parties must follow to achieve some cryptographic goal.
+
+## 1.1 Encryption
+
+**Encryption** is a way of achieving confidentiality. Encryption primitives scramble a message so only the intended recipient can read it.
+
+One of the most fundamental tools in cryptography is **symmetric** encryption. It lets two parties exchange data confidentially using a single shared secret. This shared secret is known as the **key**. In symmetric encryption the key is used to both lock (encrypt) and unlock (decrypt) the message, hence the term symmetric.
+
+[AES](https://csrc.nist.gov/pubs/fips/197/final) stands for advanced encryption standard, and is the algorithm used to implement most symmetric encryption in practice. Let’s say Alice wants to send a secret message to Bob. They share an AES key (we will set aside how for now), which Alice uses to encrypt her message, scrambling it into ciphertext. She can now send it over an insecure channel. Even if anyone is watching, all they will see is random-looking bytes. Bob can recover the original message by decrypting the ciphertext with the same AES key Alice used to scramble it.
+
+At a high level, this process looks like:
+
+`keyGen(seed) → key`
+
+`encrypt(key, plaintext) → ciphertext`
+
+`decrypt(key, ciphertext) → plaintext`
+
+Within symmetric encryption there are two main families: **block ciphers** and **stream ciphers**. We'll start with block ciphers, as AES is classed as a block cipher. Stream ciphers come up shortly. A cipher is any algorithm used to encrypt or decrypt data. Block ciphers like AES encrypt fixed-size blocks. For AES, that's 128 bits at a time, scrambling each block with the key. AES comes in three key sizes: AES-128 (128-bit key, 10 rounds), AES-192 (192-bit key, 12 rounds), and AES-256 (256-bit key, 14 rounds). Rounds are the number of times the algorithm applies its internal mixing function to a block. More rounds give better resistance against attacks, at the cost of speed.
+
+AES on its own only encrypts one 128-bit block at a time, but real-world data is almost never exactly 128 bits long. To handle data of varying lengths, we wrap the block cipher in a mode of operation: an algorithm that lets us apply the block cipher to data of arbitrary length. Different modes have different security properties. The mode most used in practice is **AES-GCM** (Galois/Counter Mode), which is an example of **AEAD** (authenticated encryption with associated data). AEAD does two things in one: it encrypts the plaintext for confidentiality, and it generates a small authentication tag that lets a recipient detect any tampering with the ciphertext. When implemented and used correctly, an AEAD mode like AES-GCM provides both confidentiality and integrity in a single operation.
+
+Stream ciphers are the other family in symmetric encryption. The dominant stream cipher in modern use is **ChaCha20**, designed by Daniel Bernstein in 2008 and standardised in [RFC 8439](https://datatracker.ietf.org/doc/html/rfc8439). ChaCha20 generates its keystream from the key combined with a **nonce** (a number used once per key) and a **counter** (an integer incremented per block), so every block produces unique keystream output.
+
+ChaCha20 takes a 256-bit key, a 96-bit nonce, and a 32-bit counter. It outputs a keystream of an arbitrary length that's XORed against the plaintext bit by bit. XOR (exclusive OR) is a bitwise operation that outputs 1 when two bits differ and 0 when they match. XORing a value with the same key twice returns the original, making it reversible for encryption. Because the cipher generates a continuous keystream, no mode of operation is needed: arbitrary-length encryption is built into the primitive itself. ChaCha20 is almost always paired with the [Poly1305](https://datatracker.ietf.org/doc/html/rfc7539) authenticator, producing the AEAD construction ChaCha20-Poly1305. It's faster than AES in software on platforms without hardware AES support (mobile, IoT, embedded), which is why TLS implementations on phones often prefer ChaCha20-Poly1305 over AES-GCM.
+
+The distinction between block and stream ciphers is not always as clear as it sounds. A block cipher running in counter mode behaves as a stream cipher: it generates a keystream by encrypting a counter, then XORs that keystream against the plaintext. So the difference is more about the underlying primitive than the UI.
+
+### The foundational primitive
+
+Symmetric encryption isn't just one topic in cryptography, it is the foundational primitive. Nearly every other primitive we will cover depends on, reduces to, or is benchmarked against symmetric encryption in some way. Symmetric encryption is how data stays private when it crosses networks we don't control, or sits on hardware we can't physically protect. AES is hardware-accelerated on essentially every modern CPU because it gets used that much. Let's look at a few of the places where symmetric encryption is deployed behind the scenes.
+
+**TLS** is the protocol behind the padlock icon in a browser, every HTTPS request, and every secure email connection. Once the handshake completes, all of the subsequent application data is symmetrically encrypted. The two dominant AEAD ciphers in modern TLS are [AES-GCM](https://en.wikipedia.org/wiki/Galois/Counter_Mode) and [ChaCha20-Poly1305](https://datatracker.ietf.org/doc/html/rfc8439).
+
+**Network-layer encryption** protects traffic between machines independently of what's running on top. WPA2 and WPA3 encrypt wireless traffic between devices and access points using AES-CCMP. WireGuard protects VPN tunnels with ChaCha20-Poly1305 while IPsec and OpenVPN typically use AES. Because this sits beneath the application, even when an app itself isn't using TLS, the traffic underneath is already encrypted as it crosses the network. Without WPA, anyone in the room with a wireless adapter could read your traffic.
+
+**End-to-end encrypted messaging apps** like Signal, WhatsApp, and iMessage also rely on symmetric encryption for message contents. Once the [Signal protocol](https://signal.org/docs/) establishes session keys, each individual message is encrypted with AES. "End-to-end" means encryption happens on a device and only decrypts on the recipient's device, not on Signal's servers, not on WhatsApp's, not on anyone in between. The symmetric cipher is what makes the messages actually private.
+
+**Disk encryption** is another widely used practice that relies on symmetric encryption, which protects data at rest.FileVault on macOS,BitLocker on Windows,LUKS on Linux all use AES, typicallyAES-XTS, a mode designed specifically for disk sectors. Each sector is encrypted with a tweak so identical plaintext sectors don't produce identical ciphertext. The threat model here is different from everything so far because the attacker has physical possession of the device. Without encryption, a stolen laptop is a data breach. With it, the drive contains unreadable ciphertext.
+
+### Trusting the ciphers
+
+It's clear that symmetric encryption shows up a lot in the real world, but under what conditions can we consider symmetric encryption secure?
+
+A secure symmetric cipher's output should reveal nothing about the plaintext or key. To an attacker without the key, the output should be indistinguishable from a uniformly random string. For block ciphers like AES, the formal name for this property is **pseudorandom permutation** (PRP). It means that a block cipher under a secret key should be computationally indistinguishable from a uniformly random bijection (one-to-one mapping) on the block space:
+
+`{0, 1}^128 → {0, 1}^128 for AES`
+
+Imagine a perfectly shuffled deck of 2^128 cards and each input position holds one card. Without the key, you don't know what swaps happened during the shuffle. Every card you see after the shuffle looks random.
+
+For stream ciphers like ChaCha20, the equivalent property is called a **pseudorandom function** (PRF). It's a similar concept to PRP. Under a secret key, the output should be indistinguishable from random to anyone without the key. The relaxation is that a PRF doesn't need to be a bijection. AES under a fixed key is a permutation. Every 128-bit input maps to a unique 128-bit output, like the shuffled deck above. A PRF doesn't require that same uniqueness, it just requires its output to look random. Every PRP is also a PRF, but not every PRF is a PRP. ChaCha20 aims to be a PRF.
+
+To be clear on this, we don't know AES is a PRP. There's no mathematical proof that a cipher with AES's structure must be indistinguishable from a random permutation. What we know is that decades of public cryptanalysis haven't found a way to do so faster than brute force. AES sits in the same category as other foundational hardness assumptions in cryptography. It's believed to be hard, backed by constant analysis, but not proven impossible. The assumption could turn out to be wrong, but so far, it hasn't.
+
+A cipher's design shouldn't need to be secret to be secure. The system should stay secure even if everything about it is public except the key. This is Kerckhoffs's principle, and it shows up a lot in cryptography. The idea of security through public scrutiny follows from this. AES has been public since the late 1990s and survived over 25 years of academic and industrial cryptanalysis. ChaCha20 has been public since 2008 and has accumulated over 15 years of similar scrutiny. Neither has been distinguished from a random permutation (AES) or function (ChaCha20). That's the source of our confidence, not absolute certainty, but a long and public track record.
+
+### How hard is it to break symmetric encryption?
+
+That "public track record" matters because it tells us what attack the attacker is reduced to. If no attack faster than **brute force** has been discovered, an attacker has to try every possible key, decrypt under each, and check whether the result looks like possible plaintext. The defence against brute force is the keyspace size. If we make the number of possible keys sufficiently large, it would be infeasible for an attacker to try them all. An N-bit key gives 2^N possibilities to search.
+
+To turn that 2^N number into something concrete, we need to know how fast the attacker can search. If they try K keys per second, the time to exhaust that entire keyspace is pretty straightforward:
+
+`Key space: 2^N keys`
+
+`Attack rate: K keys/second`
+
+`Time to exhaust keyspace: 2^N / K seconds`
+
+`= 2^N / (K × 3.15 × 10^7) years`
+
+where 3.15 × 10^7 is approximately the number of seconds in a year. The attacker expects to recover the key after trying half the keyspace on average, so the realistic figure is about half. The 2^N upper bound is what matters with scaling.
+
+Let's run this against 3 benchmarks. Setting N = 128 for AES-128 gives a key space of 2^128 (roughly 3.4 × 10^38 keys). If we plug in K we get three different brute-force times:
+
+`Laptop (10^9 operations/sec) = approx 10^22 years`
+
+`Supercomputer (10^18 operations/sec) = approx 10^13 years`
+
+`Bitcoin network (10^21 H/s) = approx 10^10 years`
+
+For comparison, the universe is roughly 1.4 × 10^10 years old. The Bitcoin network has the most concentrated brute-force compute on Earth. It runs SHA-256 rather than AES, but the rate gives us a rough sense of what AES-128 would face from an attacker with similar resources. Even at that rate, exhausting the keyspace would take longer than the universe has existed.
+
+Assuming no cryptanalytic shortcut exists and brute force remains the best known attack, AES-256 puts that attack even further beyond reach. Its keyspace is 2^128 times larger than AES-128's. 128 bits is the modern symmetric floor and 256 bits is the margin to keep against future compute growth. The margin matters most against threats we can't predict (or CRQCs!).
+
+### When symmetric encryption breaks
+
+Symmetric encryption breaks in two main ways. The first is the cipher itself going weak. An example is DES, the symmetric standard before AES (NIST 1977 with a 56-bit key). Compute caught up with the keyspace within two decades, and by 1998, EFF's purpose-built Deep Crack machine could recover a DES key in 56 hours. The cipher's PRP property wasn't broken; the keyspace was just too small. Its successor 3DES uses three sequential DES operations: encrypt, decrypt, encrypt, each with a separate key. 3DES survives brute force better and provides roughly 112 bits of effective security against meet-in-the-middle attacks, but it also inherits DES's 64-bit block size, which is a bigger problem. After roughly 2^32 ciphertext blocks under one key (about 32 GB), the blocks start repeating statistically, which can be enough to leak plaintext. This is known as the [Sweet32](https://sweet32.info/) attack and it's why NIST disallowed 3DES for new applications past 2023.
+
+The second way symmetric encryption breaks is **misuse**. A cipher can be mathematically sound, but the way it's wrapped around data isn't. A classic example is ECB (Electronic Codebook) mode. It encrypts each plaintext block independently. Identical plaintext blocks produce identical ciphertext blocks, so any structure in the plaintext survives the encryption. Encrypt an image in ECB mode and the silhouette of the original picture is still visible in the ciphertext. The [Adobe 2013 data breach](https://krebsonsecurity.com/2013/10/adobe-to-notify-2-9-million-customers-of-data-breach/) is the deployment version: roughly 150 million users passwords were encrypted with 3DES in ECB mode. The ECB structure plus reused password hints in the leaked database let researchers recover multiple plaintexts. The cipher was doing its job but the mode was the weakness.
+
+The most common failure for modern AEAD constructions is **nonce reuse**. Both stream ciphers like ChaCha20 and counter modes like AES-GCM require a unique nonce per message under any given key. If two messages are ever encrypted with the same key and the same nonce, the keystream cancels out under XOR, leaving the attacker with the XOR of the two plaintexts (often enough to recover both, given any redundancy in the plaintexts). For AES-GCM specifically the problem is worse: nonce reuse doesn't just leak the plaintexts, it leaks the authentication key entirely, letting an attacker forge ciphertexts under that key for any message they choose. The cipher is fine. The protocol or system that handed out a repeated nonce is the failure.
+
+Two more misuse classes are worth knowing about. **Padding oracle** attacks target CBC-mode constructions where the validation logic leaks one bit: whether the plaintext padding decoded correctly. From repeated one-bit leaks, an attacker can recover full plaintexts. The cipher is fine, the padding scheme is fine; the validation logic ties them together in a way that leaks. Cache-timing side channels (Bernstein, 2005) work at the implementation level. Naive software AES uses lookup tables whose memory-access patterns produce data-dependent cache hits and misses, which a co-located attacker can time to extract key bits. The fix in both cases is to remove the leak: authenticated modes (which sidestep padding oracles entirely) and constant-time implementations (hardware AES-NI, or bit-sliced software).
+
+The takeaway across all of these is straightforward: cryptographic security is not the same thing as system security. AES and ChaCha20 have withstood sustained public cryptanalysis without any attack faster than brute force. Many real world failures of symmetric encryption are about how the cipher is used, not what was used. The cipher being a PRP doesn't help if the protocol around it leaks padding bits, the implementation leaks timing, or the system reuses a nonce. Symmetric encryption is the foundational primitive, but it only takes you so far.
+
+## 1.2 Hashes
+
+### Different primitive, same family
+
+**Hashes** are another primitive in the symmetric family, though most don't use a key at all. They are grouped here because, like AES, they don't rely on the hard math problems that underpin asymmetric cryptography (which we will meet later). A hash is just a function that takes any-size input and gives a fixed-size output. You've likely met hash functions before through a different lens: they power dictionary lookups, hash tables, and object property access.
+
+The defining property of all hash functions is that they should be deterministic. The same input should always give the same output. Hash a string now or in 50 years, the bytes in the output won't change. Nearly all use cases for hashes (for example verifying passwords or identifying transactions) depend on determinism. Without it, you couldn't reliably verify, identify, or compare anything by its hash.
+
+**Cryptographic hash functions** are hash functions with additional security properties (which we will meet soon), designed to resist deliberate attacks rather than just spread inputs to outputs evenly. From this point on, we'll use "hash" as shorthand for "cryptographic hash functions" as discussion of hashes going forward will be through a purely cryptographic lens. The output of a hash is known as a **digest**, or less formally, a fingerprint. For example, every Bitcoin transaction ID is just a hash of the transaction's contents.
+
+The workhorse hash function in practice on the internet is [SHA-256](https://csrc.nist.gov/pubs/fips/180/4/final), which produces a 256-bit digest. Here’s what hashing the string "hello" would look like at a high level:
+
+`sha256("hello") → digest`
+
+Our resulting digest will look like:
+
+`2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824`
+
+The resulting digest will always be 256 bits (32 bytes) long.
+
+### But why are hashes so important?
+
+Cryptographic hashes are how computers answer "is this the same thing?". Almost every modern system depends on getting an answer to this question that's quick, accurate, and most importantly trustworthy. This is the difference between `npm install`downloading code you want from a publisher or downloading malware an attacker swapped in. If you’re still not convinced, here are some operations that rely on hashing to show just how significant this primitive is.
+
+Git, package managers, and file downloads all use hashing for **content addressing** and **integrity checks**. When you make a commit, Git takes the contents of your commit (tree, parent commit, author, message etc) and [SHA-1](https://en.wikipedia.org/wiki/SHA-1) hashes it. That digest is the commit ID. Every Git object (blob, tree, commit, tag etc) is named by its hash. This is what we call content addressing. You may have noticed that if two different commits could produce the same hash output, then Git's history model would break down. This is an important sneak peek at the security properties of hash functions and where they can fail, which we will shortly meet in more detail.
+
+**Digital signatures** also heavily rely on hashing. In practice, we almost never sign a digital message directly. We sign the hash of the message. Schemes we use for signing such as [RSA](https://www.cyberark.com/what-is/rsa-encryption/) and [ECDSA](https://en.wikipedia.org/wiki/Elliptic_Curve_Digital_Signature_Algorithm) both follow this hash-then-sign pattern. Signature schemes operate on fixed-size inputs, but messages can be any length; the hash fixes that. Another reason for this pattern is that signing is expensive, hashing is cheap. We can compress the message first, then sign the smaller digest.
+
+**Password storage** is one more crucial example of why hashes are so important.When a service stores your password, it should never store the password itself. If that database leaks, attackers would immediately have access to every plaintext password. Instead, we store the hashes of passwords. One important note is that raw cryptographic hashes are a bad implementation choice here. They're designed to be fast; exactly what an attacker wants when brute-forcing guesses on hardware. We deliberately use slower password hashing functions such as [bcrypt](https://en.wikipedia.org/wiki/Bcrypt), [scrypt](https://en.wikipedia.org/wiki/Scrypt), and [Argon2](https://en.wikipedia.org/wiki/Argon2). These are tuned with work factors to make each guess expensive. They also mix in a per-user salt; a random value stored alongside the hash. This means that even an attacker who stole a database has to attack each account separately; they can’t just test one guess against every user at once.
+
+Now that we have started getting a feel for what a hash function is and why they matter, let's take a closer look at their security properties which keep cropping up.
+
+### What properties make a hash secure?
+
+Useful cryptographic hashes should have three key security properties: **preimage resistance**, **second-preimage resistance**, and **collision resistance**. Each captures the resistance a hash has against different attacks. Without these properties, a cryptographic hash would fail in most of the use cases we just described.
+
+Preimage resistance (also called one-way) means that given a digest, it should be computationally hard to find an input that produces that digest.
+
+`Given: h`
+
+`Find: any m with H(m) = h`
+
+Imagine throwing ingredients in a blender and switching it on. More blending won't just 'unblend' your smoothie.
+
+Second-preimage resistance means given a specific input, it should be hard to find a different input that hashes to the same digest.
+
+`Given: m`
+
+`Find: any m' ≠ m with H(m') = H(m)`
+
+Imagine someone hands you a signed contract, can you forge a different document that hashes to the same digest, so the original signature still validates? The target is fixed; the attacker has to find a second input matching it.
+
+Finally, collision resistance. This means it should be hard to find any two different inputs that hash to the same digest.
+
+Given: no constraints
+
+`Find: any pair (m, m') with m ≠ m' and H(m) = H(m')`
+
+Imagine crafting two contracts from scratch, both of which are engineered to hash to the same digest. If one gets signed, an attacker could substitute the other later, and by the same hash, the signature still validates.
+
+These properties are defined above in order of how much freedom an attacker has when attacking each property. For example, it takes many more operations for an attacker to find an input that hashes to a given digest, as opposed to just trying to find any two inputs that hash to the same digest. Let’s look at why this matters with some numbers.
+
+### Attacking these properties
+
+Brute-forcing a specific output with a preimage attack means trying approximately 2^n inputs, where n is the number of bits in each digest. For SHA-256, that's approximately 2^256 operations. Even on an optimistic laptop running 10^9 hashes per second, it would take about: `2^256 / 10^9 seconds ≈ 10^60 years`
+
+Keeping in mind that the universe is only about 10^10 years old, this attack would be infeasible. Even if we scale the attacker up by three orders of magnitude (take a super-computer running 2^40 H/s) this still only drops the time to roughly 10^57 years.
+
+Second-preimage resistance lands in the same bound: approximately 2^n. Assuming outputs appear as random (an important detail we will circle back to), finding an input that hits a fixed digest is the same probability game whether the attacker chose the target or had it handed to them, so the numbers are unchanged. What makes second-preimage distinct from preimage is the attack scenario, not the cost.
+
+### Pigeonholes and the birthday paradox
+
+Collision attacks turn out to be cheaper than preimage attacks for two reasons.
+
+Firstly, the **pigeonhole principle**. A hash function maps inputs of arbitrary size to a fixed n-bit output. This gives us a fixed number of `2^n` possible digests, with infinitely many possible inputs. By the pigeonhole principle, some inputs must share a digest. The question isn't whether collisions exist, only whether we can find them.
+
+The second reason is attacker freedom. Preimage and second-preimage attackers are constrained: a hypothetical attacker is handed a target or a fixed input and has to hit it. A collision attacker is free, with no fixed target. Both inputs are under their control. They just need any two of the inputs they try to land on the same digest. So the question becomes: how many inputs does the attacker need to compute before a collision is likely?
+
+Suppose the attacker has computed k hashes. The number of pairs they can check against each other for equality is the number of ways to choose 2 from k:
+
+`k × (k − 1) / 2 ≈ k² / 2`
+
+The `−1` stops mattering once `k` becomes reasonably large. Each pair has about a 1 in 2^n chance of being a collision.
+
+So the expected number of collisions among the `k² / 2` pairs is roughly:
+
+`(k² / 2) × (1 / 2^n) = k² / (2 × 2^n)`
+
+Set this to approximately 1; the point at which a collision becomes likely and solve for k:
+
+`k² ≈ 2 × 2^n`
+
+k ≈ √(2 × 2^n)
+
+The `√2` constant won’t change the order of magnitude so we get:
+
+`k ≈ 2^(n/2)`
+
+To find a collision in an n-bit hash, the attacker doesn't need `2^n` operations, they need `2^(n/2)`. The exponent is halved compared to preimage attacks.
+
+This is the **birthday paradox** applied to hashes. The original observation of the birthday paradox is that you only need 23 people in a room for over a 50% probability that two of them share the same birthday. 23 people give you 253 pairs of birthdays, which against 365 possible days is enough to make a match likely.
+
+For SHA-256, where preimage takes 2^256 operations, collision only needs 2^128. SHA-256 is still considered secure and 2^128 is its own kind of infeasible. However, if we consider smaller hashes, halving the exponent is the difference between assumed secure and practically broken.
+
+### Hashes have a shelf life
+
+Older hash functions like [MD5](https://en.wikipedia.org/wiki/MD5) and [SHA-1](https://en.wikipedia.org/wiki/SHA-1) are now considered broken. When we talk about a "broken" function, we don’t mean it’s stopped working, we mean the security they were supposed to provide no longer holds.
+
+The `2^(n/2)` collision bound relies on a key assumption. For the bound to matter, the hash must behave like a random oracle: returning what looks like a uniformly random digest for every new input. The bounding derivation we just did only works if every digest is equally likely. If some digests are more probable than others, the effective output space shrinks and collisions can arrive much faster than 2^(n/2).
+
+So, a good hash needs two things: enough output bits to make 2^(n/2) infeasible, and outputs that are indistinguishable from random, so the attacker can't do better than that bound. Output size sets the ceiling; the quality of the function determines whether the attacker ever needs to reach it. At an implementation level, in order to satisfy "looks random" the hash should pass the **avalanche criterion**: flipping one input bit should flip roughly 50% of the output bits, each independently.
+
+This splits attacks into two categories. First, brute force: try inputs until a collision appears. This is bounded by the ceiling. Moore’s law states that the number of transistors in our processors has approximately doubled every two years. For this reason we have to keep raising the number of bits in our digests as compute increases over time. While a 64-bit hash was considered secure until the mid 1990s, a modern laptop could find a collision in less time than it would take you to make a coffee. This is how hash functions can fall to brute force and increasing compute.
+
+Second, structural attacks: exploit mathematical patterns in the function to drop the work below 2^(n/2). We can run statistical tests on the digests of a hash function to check whether output looks uniformly random. However, outputs can look random under every test and could still hide undetected structure. The only real source of confidence we have is **Kerckhoffs's principle**: publish everything, and let the cryptographic community try to break the design for years. This is where real confidence and security come from.
+
+In the case of MD5 (the default hash function across the 1990s and early 2000s), Hans Dobbertin first found collisions in MD5's compression function in 1996. At this point cryptographers started warning against MD5 for new designs. In the following decade, several much more dangerous collision attacks were announced. By 2012, MD5 collisions weren't just academic, they were deployed. The [Flame malware](https://www.microsoft.com/en-us/security/blog/2012/06/05/flame-malware-collision-attack-explained/) was first reported in May 2012. It used an MD5 chosen-prefix collision attack to forge Microsoft code-signing certificates and impersonate Windows updates. It acted as an "industrial vacuum cleaner" for sensitive documents, quietly recording audio, capturing screenshots, and logging keystrokes. This is a stark example of what can happen when a deployed hash falls, and why their security properties are so important.
+
+## 1.3 Bits of Security
+
+Throughout this document so far, the concept of "bits of security" has already cropped up quite a bit. AES-256 gives 256 bits of security, a 256-bit hash gives 256 bits of preimage security but only 128 against collisions, and so on. This number does a lot: it's how we quantify the security of schemes and how we compare them across families. As the name suggests, the unit is bits, with each additional bit roughly doubling the brute-force cost of breaking the scheme. This measurement is what we use to set key sizes, decide what's broken, and frame migration to more secure schemes (for example PQ schemes). To understand where this number comes from and what it actually promises, we need three things: to understand what we mean by "secure", a way to measure randomness, and a formula from 1949 that ties these together.
+
+### What do we mean by "secure"?
+
+When we say a cryptographic system is "secure", what do we mean? It turns out we have two very different standards for security: **information-theoretic** and **computational**.
+
+A scheme is information-theoretically secure if no attacker can break it even with unlimited compute or time. It can be proven mathematically that the ciphertext doesn't contain enough information to recover the secret. No amount of brute force or clever attacks can change that (assuming the scheme is implemented and used correctly).
+
+A scheme is computationally secure if every known attack requires more time, memory, or computational resources than any realistic adversary can utilise within the relevant security lifetime. The guarantee is provisional: it depends on current capabilities and the assumption that no faster attack exists.
+
+Most modern cryptography lies under the computational security umbrella: if someone today says "AES-256 is secure", or "Bitcoin's signatures can't be forged" they don't mean mathematically impossible; they mean computationally infeasible under current assumptions. If you don't understand the difference, you don't understand what a cryptographic scheme promises. Treating these claims as absolute can be extremely dangerous as a cryptographer; they don't account for the provisional nature of computational security.
+
+**Bits of security** is the unit we use in the computational world. All the schemes and primitives we have met so far sit in the computational category, as do the asymmetric schemes we will soon meet: RSA, elliptic curves, and the post-quantum standards. Only one major scheme is in the information-theoretic camp: the [one-time pad](https://en.wikipedia.org/wiki/One-time_pad) (or OTP), and it's almost never used in practice for reasons we will meet at the end of this section on bits of security.
+
+### Cryptographic entropy
+
+Underneath the "bits of security" framework lies a more fundamental measurement: how unpredictable a secret is. That's cryptographic **entropy**: how we measure randomness. It's the unit behind key strength, password guessability, and the quality of every random number cryptography depends on.
+
+A concrete example: Cloudflare keeps a wall of one hundred lava lamps in their San Francisco lobby. A camera films the lamps, and each frame becomes a string of effectively random numbers that Cloudflare uses as a starting point for generating cryptographic keys. The bubbling wax is chaotic enough that nobody should be able to predict what the next frame will look like. We know that computers themselves can’t produce true random outputs; they are deterministic by design. For genuine cryptographic unpredictability, we can reach outside the computer into physical processes such as the lava lamps in this example. That unpredictability is what entropy measures.
+
+In practice, most systems don't rely on physical processes like lava lamps. Modern operating systems run a **CSPRNG** (Cryptographically Secure Pseudo-Random Number Generator). The "C" and "S" (cryptographically secure) mean an attacker who sees prior outputs can't predict future ones, even with substantial compute. The "P" (pseudo) acknowledges the important caveat that the output is deterministic given the seed; it should appear random to anyone who doesn't know the seed. The seed itself comes from a pool of unpredictable inputs the OS collects continuously, such as dedicated hardware RNG instructions on modern CPUs, or the timing of network packets and disk events. The standard interface for cryptographic randomness is **/dev/urandom** or the **getrandom()**syscall on Linux, as well as the Windows and MacOS equivalents. So Cloudflare's lava lamps are real, but supplementary. For most use cases (generating keys, nonces, and IVs), we can assume OS-level randomness to be sufficient.
+
+Just like security, we measure entropy in bits, where one bit represents one yes-or-no question's worth of uncertainty. In the uniform case, entropy is simply:
+
+`H = log₂(N)`
+
+where N is the number of equally likely outcomes.
+
+To get a better feel for the intuition of entropy, let's consider the following question. Which password is harder to guess: the entire contents of a published novel, or eight randomly chosen ASCII characters? Length-wise it isn't close. But length isn't the question. Entropy is. The novel itself might be a million characters long, but from the attacker's perspective none of that is entropy. All that matters is how many novels the attacker has to try. Firstly let's calculate the entropy of the novel contents password:
+
+Total books ever published: 130 million
+
+Novels specifically: 20 million.
+
+Counting all of recorded history, all languages, all translations, lets stretch this to 100 million novels.
+
+`H = log⁡ 2 (10^8) ≈ 26.6 bits`
+
+Let’s be generous and say ~30 bits
+
+Now for the random password containing 8 random ASCII characters:
+
+There are 95 printable ASCII characters in total:
+
+`Total candidates = 95^8 = 6.6 × 10^15`
+
+`H = 8 × log 2 ​(95) ≈ 52.6 bits of entropy`
+
+The 8 character password has approx. 26 more bits of entropy.
+
+`2^26 ≈ 67 million`
+
+The 8 character password is approximately 67 million times harder to brute-force than the novel. We can now see that password length matters surprisingly little; the security of the password relies on its entropy.
+
+We use bits of security as the standard rather than entropy because we want to quantify how secure a cryptographic scheme is, not just how random it is (although they are closely related). They coincide in the cleanest case, where a uniformly random N-bit key gives N bits of entropy and N bits of security against brute force. They diverge whenever the attack isn't pure brute force. SHA-256 has 256 bits of preimage security but only 128 bits of collision security, because the birthday bound is a different attack vector. AES-128 has 128 bits of security because no attack better than brute force is currently known. Entropy is what the secret is; bits of security is what it costs to break the scheme that uses it.
+
+### Shannon 1949
+
+It would be criminal to discuss [Shannon 1949](https://ieeexplore.ieee.org/document/6773024) and not mention Claude Shannon. The "bits" in "bits of security" is his unit, and entropy as we just measured it is his definition. When we say AES-256 has 256 bits of security, we're implicitly assuming brute force is the best an attacker can do. In his 1949 paper [Communication Theory of Secrecy Systems](https://pages.cs.wisc.edu/~rist/642-spring-2014/shannon-secrecy.pdf), Shannon gave us the formula for when brute force actually succeeds.
+
+Picture an attacker who's intercepted some ciphertext and is brute-forcing the key. At some point they'll have gathered enough ciphertext material to narrow the possibilities down to a single candidate, but how much ciphertext is that? Shannon called the answer the **unicity distance**. Let’s look at an example.
+
+Suppose we intercept the ciphertext "QRXBNP" and start brute-forcing keys. Most will produce gibberish strings like "NOZRTB" or "VBSAQU", so we can discard them. However, two keys produce meaningful English: one decrypts the ciphertext to "ACCEPT", the other to "REJECT". Both are plausible, but without more information, we can't tell which key was actually used. These are known as **spurious keys**: keys that decrypt to meaningful but possibly incorrect plaintext.
+
+The fix is more ciphertext. Suppose a second message is intercepted from the same source, extending what we have to "QRXBNP TGB". Each candidate key can now be tested against the longer string. The first key gives "ACCEPT NOW". The second gives "REJECT XKZ". The second produces gibberish on the new section and is discarded. With enough ciphertext, every spurious key eventually produces gibberish somewhere, leaving the attacker with the correct one. Shannon's unicity distance is the minimum amount of ciphertext needed before all spurious keys can be eliminated, the point at which only the correct key survives.
+
+In our spurious keys example, we discarded a plaintext decryption by spotting that its continuation produced gibberish. That example quietly assumed something about the plaintext: that it has structure. Natural language isn't uniform random noise. E is more common than Z, TH and HE appear constantly, QZ essentially never occurs. Look at half a sentence and you can usually guess the next character. That predictability has a name: **redundancy**. It's the "wasted" information per character, the part the alphabet could have carried but didn't, because language has rules. If the plaintext distribution were truly uniformly random, every decryption under every key would look equally plausible, and no spurious keys could ever be eliminated. Redundancy is the property the unicity distance formula is built on.
+
+To quantify redundancy, we can compare the maximum information per character a language could carry against how much it actually carries. For a 26-letter alphabet the maximum is:
+
+`log₂(26) ≈ 4.7 bits per character`
+
+Shannon estimated the actual entropy of English to be roughly between 0.6 and 1.3 bits per character in his 1951 paper [Prediction and Entropy of Printed English](https://ieeexplore.ieee.org/document/6773030). The redundancy ρ is the gap between this and the 4.7 bit maximum, somewhere between 3.4 and 4.1 bits per character for English.
+
+English is not unique here. Most plaintexts we encrypt carry redundancy. Structured data formats like JSON and XML are mostly format, with the real information confined to small value fields. Source code is heavy with keywords, syntax, and indentation, all of which are predictable from context. Compressed data sits at the other end: gzip and zstd deliberately strip redundancy out, which makes compressed plaintext approximate uniform random much more closely. Cryptographic keys and properly generated nonces, by design, carry zero redundancy. This spread matters because the unicity distance formula treats ρ as a fixed input. In real systems the plaintext distribution varies enormously, and so does how quickly a cipher would fail under brute force.
+
+Putting the pieces together gives Shannon's unicity distance formula:
+
+`n₀ = log₂|K| / ρ`
+
+The shape should be intuitive once you understand the building blocks. `log₂|K|` is the number of bits of information needed to single out the correct key from all candidates. ρ is the number of bits of useful information each ciphertext character provides to the attacker (the rest is structural redundancy). Divide one by the other and you get the number of characters of ciphertext the attacker needs before they can pin down the key. For the Caesar cipher (a simple letter-shift cipher with 25 non-trivial keys) on English plaintext:
+
+`|K| = 25`
+
+and
+
+taking ρ ≈ 3.5
+
+gives
+
+`n₀ = log₂(25) / 3.5 ≈ 1.33`
+
+This tells us that approximately two characters of ciphertext is enough, which matches the intuition that we can break a Caesar cipher easily.
+
+The formula gives a sharp security relation. If the ciphertext intercepted is shorter than n₀, brute force cannot uniquely identify the key. Spurious keys remain, and the cipher is unconditionally secure against brute-force recovery in this regime, regardless of the attacker's compute. If the ciphertext is at least n₀ long, only one key survives, and the cipher is brute-force breakable given enough compute. The design principle that falls out is simple: secure ciphers want n₀ large. The formula shows two levers for pushing it up: increase the key space (raise `log₂|K|`), or decrease the plaintext redundancy (lower ρ). There is a special case where ρ effectively becomes zero, making n₀ infinite. That case is the one-time pad, the limiting case to Shannon's unicity distance formula.
+
+### The limit case: one-time pad
+
+The one-time pad is a perfect cipher that is information-theoretically secure (given that its defining conditions are satisfied). In the OTP the plaintext and key are combined (XOR in binary) to produce the ciphertext. In order for this to hold true the key must be:
+
+1. Completely random and uniformly distributed in the set of all possible keys (independent of the plaintext)
+
+1. At least as long as the plaintext message
+
+1. Completely secret
+
+1. Never reused
+
+As noted by Shannon, given that these conditions are met, the unicity distance of the OTP will always be longer than the length of the ciphertext, meaning there will always exist spurious keys and the cipher can never be cracked.
+
+In practice, the OTP is impractical for implementation due to the difficulty involved in generating a key which is: truly random, and at least the length of the plaintext. Imagine encrypting a 10GB text file, not only would we have to use a truly random key, but it would also need to be 10GB in size. How do you securely deliver a 10GB random key to the recipient without an already established secure channel? If you had one, you wouldn't need the cipher in the first place. This is the exact problem that **public-key cryptography** solves.
+
+## 1.4 The Key Distribution Problem
+
+So far we have only met symmetric encryption schemes. To recap, the "symmetric" part comes from the key itself: one secret value, used to encrypt and decrypt. Alice locks with the AES key, Bob unlocks with the same AES key. That works, but only once both parties already have the key. We still don't know how they got that key. If Alice and Bob are sitting across the same desk, they can hand the key over directly. If Alice is in Dublin and Bob is in Tokyo with only the internet between them, they can't. Sending the key over the network defeats the point of encrypting anything else over that network. Encryption only shrinks the problem. If we send a key over the same open network, we have exposed it to exactly who we were trying to hide the message from in the first place. This is the **key distribution problem**, and it's exactly what **asymmetric cryptography** exists to solve.
+
+---
+
+## 2. Asymmetric Cryptography
+
+To solve the key distribution problem, asymmetric encryption (also called public key encryption) uses two keys instead of one. Let's call them key A and key B. You have your message "HELLO", you encrypt it with key A, and to get "HELLO" back you decrypt with key B. You can't work out one key from the other, but they're linked: anything encrypted with key A can only be decrypted with key B, and anything encrypted with key B can only be decrypted with key A.
+
+We generate both keys together as a key pair. We pick one and call it our public key, and that public key really is public, we publish it everywhere. The idea is that it's out there in the world with your name on it. The other key in the pair is our private key, which we keep secret. The 'key' take away here (excuse the pun) is that the secret lives entirely on one side, and with this system no secret key exchange has to take place.
+
+This is where the system gets clever. Say Alice has a key pair, and Bob also has a key pair, and they both know the other's public key. If Alice wants to send a message to Bob, they don't have to agree on a secret key. Alice just encrypts the message with Bob's public key and sends it. Bob can then simply decrypt the message with his private key.
+
+There's a second thing we can do with this system. If Alice were to encrypt something with her private key and publish it, her public key is out there, so anyone could decrypt it. What's the point? The fact that it can be decrypted with the public key means it must have been encrypted with Alice's private key. So we can be cryptographically confident that the message really came from Alice. This 'signing' is known as a **digital signature** and will be a focus of later parts of this report.
+
+Now imagine we do both together. Alice encrypts with her private key and then with Bob's public key, and sends it to Bob. Now Alice knows nobody (except for Bob) can read the message, and Bob knows it has to have come from Alice and hasn't been modified. This system provides security and confidence in the message without Alice and Bob ever having to agree on a secret key or having to physically meet.
+
+A quick note for later: "encrypting with the private key" is the right picture, but it is a simplification. Real signature schemes are a distinct operation, not encryption run backwards, and we will see how they actually work in Section 3.
+
+### Authentication vs secrecy
+
+In this section so far we have met two high level tools. Let's take a minute to be precise about what jobs they do. A secure conversation has to answer two separate questions. The first is **secrecy**. Can anyone else read this? The second is **authentication**. Are we really talking to who we think we're talking to? Key exchange answers the first question, digital signatures answer the second.
+
+- A **key exchange** says: we can agree on a shared secret over an insecure channel. That secret encrypts the traffic, so a third party can't read it.
+- A **digital signature** says: this message provably came from the holder of the private key. It lets you verify who sent the message.
+
+Secrecy without authentication gives you a private conversation with possibly the wrong person. An attacker who sits in the middle could run a key exchange with each side separately and could read everything. Authentication without secrecy means Bob can prove the message came from Alice, but so can everyone else who read it on the way. Systems in practice need both, which is exactly what TLS does. It uses signatures to prove the server is who it claims to be and key exchange to agree the secret that encrypts the session.
+
+### Uses of asymmetric cryptography
+
+Before we take a look at those hard problems, let's take a moment to think about why this matters.
+
+You have already used asymmetric cryptography dozens of times today. Every padlock in your browser is asymmetric cryptography doing both jobs at once: a key exchange so your laptop and the server can agree on a secret, and a digital signature so your laptop knows the server really is your bank and not someone pretending to be it.
+
+The same two tools appear all around you. Signal and WhatsApp run a key exchange so that two phones that have never met can agree on a shared secret. Logging into a server over SSH is a signature: you prove you hold a private key, and no password is actually sent. A software update, for example, should be authorised by a signature. Your phone verifies the update really came from Apple or Google before it will start the download. A signed Git commit is a signature on authorship, and a blockchain transaction is a publicly verifiable signature that says "the holder of this key authorises this". Note what blockchains are not doing here: nothing on the chain is encrypted. The ledger is public by design. Ownership in most blockchains relies entirely on signatures.
+
+Under the hood, all of these examples rely on the same small set of hard mathematical problems, what these problems are and why they matter is what we will take a look at next.
+
+## 2.1 The Hard Problems
+
+### Easy one way but hard the other
+
+The security of asymmetric cryptography relies on problems that are easy in one direction and **hard** in the other. "Hard" is a technical term. It does not mean impossible; it means that the best algorithms anyone knows scale so badly with the size of the problem that, at the sizes we use, computers can't finish in any practical time.
+
+Take a splash of milk and a scoop of coffee beans, put them together and you have a coffee. Now imagine handing that cup to someone and asking them to tell you exactly how much milk and how much coffee grounds went in. The information is in there, but the mixing has buried it. Functions of this type, assumed infeasible to reverse, are called one way functions (just like before with the blender analogy in the hashes section).
+
+Cryptography needs that idea in a mathematical form. Multiplying two numbers is easy. Any computer can multiply two 300-digit prime numbers in a blink. Now try to reverse it. Given the roughly 600-digit result, try to find the two primes that produced it. Nobody knows how to do this in any reasonable time. Note the word choice that nobody knows how, not nobody can prove it impossible. This asymmetry, easy to multiply, hard to factor is the foundation of [RSA](https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.186-5.pdf) encryption, named after its inventors Rivest-Shamir-Adleman. RSA was the first practical public-key encryption scheme and still one of the most widely used today. For now it's enough to know that the security of RSA rests on the difficulty of factoring large integers.
+
+We call factoring hard because the best algorithm anyone has found, after decades of work by people with every incentive to do better, would still take longer than the age of the universe at cryptographic sizes. Despite this, there is still no proof that a faster way doesn't exist. Remember that the security of most of the internet relies on the fact that nobody has found faster solutions to these problems yet.
+
+A one-way function like our hash functions has a clear limitation. If nobody can reverse it, that includes the people we want to be able to read the message right? What we need is a one way function with a secret shortcut, a **trapdoor**. Easy forward for everyone, hard backward for everyone, except for the one person holding an extra piece of information, for whom the reverse direction becomes easy again. That extra piece of information is the **p** rivate key.
+
+### Factoring
+
+The first of our hard problems is **factoring**. Take two prime numbers, p and q, and multiply them together to get N = p × q. The factoring problem asks you to run that backwards: given only N, recover p and q. For small numbers this is easy. Given 15, you'll find 3 × 5 in your head. Given 2,491, pen and paper will get you to 47 × 53 in a few minutes. The question is what happens when p and q are each hundreds of digits long?
+
+To factor N, you could try dividing it by every number up to √N (you never need to go past the square root, because any factor bigger than √N must be paired with one smaller). Let's look at what that would look like for a 2048-bit N (the current default key size for RSA).
+
+`A 2048-bit gives``N ≈ 2^2048`
+
+`If N = p × q then the smaller factor is at most √N, so checking every integer up to (and including) √N will find it.`
+
+`√N = N^(1/2) ≈ (2^2048)^(1/2)`
+
+`√N ≈ 2^1024`
+
+Trying every integer from 2 to √N means checking on the order of 2^1024 possible divisors.
+
+You may have noticed that this attack wastes effort. Most of the divisors we try are composite. If a composite number divided N, its own prime factors would also divide N. So the only divisors worth testing are the **prime numbers** up to √N. The count of primes below a bound x is denoted by the prime number theorem:
+
+`π(x) ≈ x / ln(x)`
+
+`Setting x = √N ≈ 2^1024`
+
+`ln(2^1024) = 1024 × ln(2) ≈ 1024 × 0.693 ≈ 710`
+
+`π(2^1024) ≈ 2^1024 / 710`
+
+2^1024 / 710 ≈ 2^1024 / 2^9.5 ≈ 2^1014
+
+Just trying primes cuts the number of divisors from approx 2^1024 down to around 2^1014. Remembering back to Section 1, 2^128 was already beyond every computer on Earth running for longer than the universe has existed. 2^1014 still blows that out of the water so in practice, people don't attack factoring this way. The lesson here is that no amount of "skip the wasted tries" will beat an algorithm fundamentally faster than brute-force.
+
+Number theory holds cleverer methods, and the best of them is the **general number field sieve** (GNFS). GNFS runs in what's called sub-exponential time: dramatically faster than trial division, but still far short of the polynomial time that would make factoring practical. Its running time grows roughly like:
+
+`e^(1.92 × (ln N)^(1/3) × (ln ln N)^(2/3))`
+
+Notice that this is not a polynomial. That exponential "shell" is what keeps factoring out of reach as N grows.
+
+Nobody has actually proven factoring is hard. Its difficulty is an assumption, supported by the best evidence available, decades of smart people failing to do better than GNFS. Also, nobody has proven that breaking RSA even requires factoring. It's conceivable that some attack recovers messages without ever finding p and q. No such attack is known, and the question has been open since the 1970s, but still open. Neither of these assumptions should be alarming, and we still consider RSA secure based on these, but it is important to note that RSA's security rests on two stacked conjectures, not proofs.
+
+As said before, factoring is the problem RSA stands on, and the sub-exponential speed of GNFS answers a question we left hanging. Why does a 2048-bit RSA key provide only ~112 bits of security? The key isn't 2048 bits because anyone expects 2^2048 work from an attacker. It's 2048 bits because GNFS is fast enough that you need a number that large before the sieve's running time climbs to 2^112 operations. The key size and the security level are different numbers because the best attack is much better than brute force. If you want 128 bits of security from RSA, you need a 3072-bit key. The mapping is standardised in [NIST SP 800-57](https://csrc.nist.gov/pubs/sp/800/57/pt1/r5/final), and this foreshadows a theme: when attacks get faster, keys must get bigger, and there's a limit to how long that game can be played. We will meet this again once we get to Section 7: the quantum threat to asymmetric cryptography.
+
+### Modular arithmetic
+
+The second of our hard problems can be found in everyday arithmetic. If it's 9 o'clock and a meeting runs for 5 hours, it finishes at 2 o'clock, not 14 o'clock. The numbers on a clock wrap around at 12 and start again. This is modular arithmetic. It looks like:
+
+14 mod 12 = 2
+
+`or`
+
+`25 mod 12 = 1`
+
+The number after "mod" (shorthand for modulus) is the size of the clock face, and the answer is where you land after wrapping around. In cryptography we just swap the 12 for a bigger number, so the clock face has a sufficiently large number of positions to make a correct guess infeasible.
+
+Why modular arithmetic? Ordinary numbers leak information. In ordinary arithmetic, bigger inputs give bigger outputs, and that ordering is a gift to anyone trying to reverse a calculation. If I tell you 2 to the power of something equals roughly a trillion, you can home in on the answer immediately: 2^30 is about a billion, too small, 2^50 is far too big, and within a relatively small number of guesses you have it. The size of the result tells an attacker how close they are.
+
+This is exactly why ordinary logarithms are easy, and your calculator computes them instantly. Modular arithmetic destroys that signal. On a clock face, results wrap around and land somewhere new each time, hopping about the dial with no pattern an attacker can steer by. A bigger exponent does not mean a bigger answer. There is only right or wrong, and when the clock face has more positions than atoms in the universe, brute force falls apart, which brings us to the second of our two hard problems.
+
+### The discrete logarithm problem
+
+The **discrete logarithm problem** is slightly more abstract than factoring. The coffee cup analogy is the same: easy to stir milk and grounds together, hard to pull them back apart. Again, that's the idea that asymmetric encryption like RSA relies on. All that changes with the discrete logarithm problem is what is actually doing the mixing. This time it is not multiplication but exponentiation on a clock face, and the "milk" and "grounds" we are trying to recover is a single hidden number. Let's take a look at how it works.
+
+Say we pick a base, which we will call g, and the amount of numbers on our clock face given by a prime number p. The forward operation is to raise g to some power x and reduce modulo p, written:
+
+`g^x mod p`
+
+That is all it is, we multiply g by itself x times, wrapping around the clock face whenever we pass p.
+
+Take the smallest interesting example, `g = 2` on a clock face of `p = 5:`
+
+`2^1 = 2, 2 mod 5 = 2`
+
+`2^2 = 4, 4 mod 5 = 4`
+
+`2^3 = 8, 8 mod 5 = 3`
+
+`2^4 = 16, 16 mod 5 = 1`
+
+`2^5 = 32, 32 mod 5 = 2`
+
+After the fourth power we are back to 2, and the sequence repeats. Those four outputs, 2, 4, 3, 1, are every nonzero number on the clock face, each appearing once before the cycle closes. A base that sweeps out every position like this is called a **primitive root** (or generator), which is why we chose 2, giving the problem a unique answer.
+
+Note the order they arrive in, the exponent increments in steps of 1, but the outputs don't. In ordinary arithmetic 2^4 = 16 sits above 2^3 = 8, and that ordering is a ladder an attacker climbs. On the clock face the ladder is gone. A larger exponent gives no hint of a larger result, so we are not leaking information to an attacker in this way.
+
+One more thing matters before we turn the problem around. Computing g^x mod p is cheap, even when x is a number hundreds of digits long. We do not perform x separate multiplications, a technique called square-and-multiply reaches g^x in a number of steps proportional to the number of digits in x, not to x itself. We can say the forward direction is fast at any scale that matters. The strength of a one way function relies on time to reverse it.
+
+### Turning it around
+
+Now let's look at reversing the discrete log problem. Given the base g, the clock face p, and a result h, recover the exponent x such that `g^x mod p = h`. That exponent is the discrete logarithm, and finding it is the discrete logarithm problem.
+
+The name hints at why it is hard. An ordinary logarithm is easy because the size of the result walks you straight to the answer, but this only works because ordinary powers climb in step with their exponent. On the clock face they don't, so that advantage is gone.
+
+Like before, the simplest attack is to try every exponent, computing g^1, g^2, g^3 until you hit h: up to p steps, but once again this is infeasible at cryptographic sizes. The algorithm known as **baby-step giant-step** does better:
+
+Write the unknown exponent as x = i·m + j with m = √p, so j is a small remainder below m and i counts the full strides of length m. Then g^x = h rearranges to:
+
+g^j = h (g^(−m))^i
+
+Then compute the left side for every j from 0 to m−1 (the baby steps) and store them in a table. Then walk the right side, multiplying by g^(−m) to advance i (the giant steps), checking each result against the table. A match gives i and j, and so x.
+
+Let's look at an example. Take g = 5 and p = 23, where 5 generates all 22 nonzero positions, and let h = 9. Here:
+
+m = √22 ≈ 5
+
+The baby steps g^0…g^4 are {1, 5, 2, 10, 4}, and the giant stride is
+
+g^(−5) = 15
+
+Walking from h: 9 (no), then:
+
+9·15 mod 23 = 20 (no),
+
+then
+
+20·15 mod 23 = 1
+
+Which is in the table at j = 0. The match is at
+
+i = 2, so x = 2·5 + 0 = 10.
+
+Check:
+
+5^10 mod 23 = 9
+
+Now the work is roughly √p operations instead of p. That sounds devastating until you see what it buys. Against a 256-bit p, brute force is about 2^256 steps and baby-step giant-step about 2^128. The square-root attack halves the bits of security, and doubling the bit-length of p restores the margin.
+
+It's also important to note that the discrete log problem isn't just tied to powers of numbers on a clock face. It can be set up in any mathematical structure with the right shape. For example we can set the problem on **elliptic curves**, which is the problem that **ECDSA** relies on under the hood, which we will meet in more detail in the next section.
+
+This is all great, we are starting to get an understanding for the assumptions that asymmetric cryptography relies on. To quickly recap: we met two hard problems, factoring and the discrete logarithm, and saw that they share one shape: easy in the forward direction and believed hard in reverse. We also saw why this forces key sizes to track the best known attack rather than the brute-force ideal, which is why a 2048-bit RSA key buys only ~112 bits of security. Next, we will turn our attention back to where asymmetric encryption is used the most: key exchangeand digital signatures, and look at these in a bit more detail.
+
+## 2.2 Key Exchange
+
+For now let's set the under-the-hood maths aside and turn our attention to the two jobs asymmetric cryptography does in practice: agreeing on a shared key, and signing. These are the two jobs the upcoming sections of this report will lean on.
+
+Recall the key distribution problem: how do we agree on or share a private key without an already established secure channel? As we said before, a key exchange is how we solve this: a protocol that lets two parties agree on a shared secret over a public channel, with no prior shared secret.
+
+**Diffie-Hellman** is one key exchange algorithm that lets us do this, and it's based on the discrete log problem. It works like this:
+
+Alice picks a private number a and publishes
+
+`A = g^a mod p`
+
+Bob picks a private number b and publishes
+
+`B = g^b mod p`
+
+They exchange A and B in the open. Alice then computes B^a mod p and Bob computes A^b mod p, and both land on the same value:
+
+`B^a = (g^b)^a = g^(ab) mod p`
+
+A^b = (g^a)^b = g^(ab) mod p
+
+So Alice and Bob now share g^(ab) mod p, a secret they can use as a symmetric key, while everyone watching has seen only g, p, A, and B. The security rests on the fact that computing A from a is cheap modular exponentiation, but recovering a from A is the discrete logarithm problem, with no known efficient method against a 2048-bit prime. Even if a third party, who we can call Eve, holds g, A, and B, she has no known way of computing g^(ab) from those values other than recovering one of the private exponents.
+
+The pattern we use in practice is **hybrid** **encryption**. An asymmetric key exchange establishes a key, which we then use to encrypt the bulk of the data with symmetric encryption. You might be wondering, why don't we use asymmetric encryption for everything? The answer is speed. Asymmetric operations are orders of magnitude slower per byte than symmetric ones, so we use asymmetric cryptography only for the expensive part: key exchange and signatures. To show the difference, I ran OpenSSL's built-in speed benchmark on my laptop, and here are the results:
+
+| **Operation** | **Throughput** |
+| --- | --- |
+| `AES-256-GCM (16 KB blocks)` | `6.77 GB/s` |
+| `RSA-2048 verify` | `72,148 ops/s` |
+| RSA-2048 encrypt | 69,477 ops/s |
+| `RSA-2048 sign` | `1,794 ops/s` |
+| `RSA-2048 decrypt` | `1,769 ops/s` |
+
+`[Hardware: Apple Silicon M1 (arm64), OpenSSL 3.6.2]`
+
+AES-256-GCM moves nearly 7 GB/s while RSA-2048's private key manages around 1,800 operations per second, covering about 190 bytes of plaintext per operation, giving us a speed of about 340 KB/s. That's the difference between approximately 0.148 seconds or 51 minutes to encrypt a gigabyte of data. This is exactly why we don't use asymmetric crypto for bulk encryption. Once both sides share a secret key and have verified who they're talking to, the bulk of the data is encrypted with the faster symmetric encryption. This is the answer to how Bob and Alice agreed on a key when we first met symmetric encryption.
+
+The Diffie-Hellman exchange is just one example of a key establishment scheme. In an alternative approach, known as a Key Encapsulation Mechanism (KEM), the encapsulation algorithm takes the other party's public key and internally produces a fresh secret, so that only the holder of the matching private key can recover that secret (given the security assumptions hold true). KEMs are a general primitive with classical applications, but it's nice to note the shape of this construction now, as encapsulation is used in the post-quantum standards we will meet in Section 8.
+
+As we said before, a key exchange is what gives us secrecy, but what it doesn't give us is authentication. It lets Alice and Bob agree on a shared secret over a public channel, but it says nothing about who is on the other end. If Eve sits between Alice and Bob, she can run a separate key exchange with each of them, ending up with one shared secret with Alice and another with Bob. This is called a **man-in-the-middle** (MITM) attack**.** Both might think they are talking to each other, when really they are both talking to Eve, who can read and relay every message. A key exchange agrees on a secret, but it cannot tell you who you agreed with. Closing that gap is where digital signatures come in, we use them to verify the authenticity, integrity, and origin of messages.
+
+## 2.3 Digital Signatures
+
+A digital signature scheme is made up of three operations bundled together:
+
+- **Key generation** (KeyGen)
+- **Sign**
+- **Verify**
+
+Key generation produces a key pair composed of a privatesigningkey and a publicverificationkey. Signing takes the private key and a message and produces a signature. Verification takes the public key, the message, and the signature, and returns valid or invalid. A valid signature proves that the message came from the holder of the private key, and that it hasn't been altered since it was signed. If the message is tampered with by even a byte after signing, the signature will fail to verify.
+
+A TLS certificate is a signature proving the server is who it claims to be, this is the authentication that defeats the MITM attack we just mentioned. Eve can relay a key exchange but she can't produce a valid signature if she doesn't hold the private key. A software update is signed so your device can confirm it really came from Apple or Google before installing it. A Git commit can be signed to prove authorship. An SSH login is a signature proving you hold the private key, so no password crosses the network. A blockchain transaction is a publicly verifiable signature proving that the holder of a key authorises a transfer. It's clear that digital signatures underpin the chains of trust that secure many of our systems, and across all of these, the same three operations do the work. So how do these operations work under the hood, and more critically, when can they break?
+
+---
+
+## 3. A Closer Look at Digital Signatures
+
+Now let's open up that 'black box' that we previously treated digital signatures as. We will take a closer look at how these three operations, key generation, signing, and verification actually work as well as the security properties a signature scheme is supposed to provide.
+
+### 3.1 KeyGen
+
+How key generation actually happens depends entirely on which scheme is running and the underlying hard maths problems that scheme is built from.
+
+For RSA signature key generation, the security rests on the difficulty of factoring a large integer. Let's take a look at the maths that happens behind key generation for RSA-2048 under the hood:
+
+Take two large random primes p and q, each roughly n/2 bits, giving 1024 bits for RSA-2048. Compute the modulus N: N = p * q
+
+`Compute the totient ϕ: ϕ = (p − 1)(q − 1)`
+
+`Choose the public exponent e (with 1 < e < ϕ and gcd(e, ϕ) = 1) In practice we use e fixed at 65537 as it's a Fermat prime in the form 2^16 + 1.`
+
+`Compute the private exponent d as the modular inverse of e:`
+
+`d = e^-1 mod ϕ`
+
+`such that:`
+
+e * d ≡ 1 (mod ϕ).
+
+`Finally, we end up with our key pair:`
+
+`public key = (N, e)`
+
+`private key = (d, N)`
+
+This works because knowing p and q makes ϕ, and therefore d, easy to compute, but recovering d from (N, e) alone requires factoring N back into p * q, which we take to be classically infeasible for a 2048-bit N. This is exactly why the private key must stay private and the public key can be published.
+
+Where RSA leans on the difficulty of factoring, ECDSA leans on the elliptic curve discrete log problem (ECDLP). It runs over an elliptic curve and for secp256k1, the curve is:
+
+`y² = x³ + 7 (so a = 0, b = 7)`
+
+over a finite field of prime order p.
+
+The scheme is defined by a generator point G on that curve and the curve order n (the number of points G generates). These are public, fixed parameters. For ECDSA, the security rests on the difficulty of recovering a scalar from a point which is the elliptic curve discrete log problem:
+
+`Pick a random integer d in the range [1, n−1]. This is the private key:`
+
+`d = random integer in [1, n−1]`
+
+`Compute the public key Q by scalar-multiplying the generator G by d:`
+
+`Q = d * G`
+
+`Finally, we end up with our key pair:`
+
+`public key = Q private key = d`
+
+This works because computing Q from d and G is easy, but recovering d from Q and G alone is the elliptic curve discrete log problem, which we take to be classically infeasible. This is the direct analogue of RSA's "factoring N is hard," and it's exactly why d must stay private while Q can be published.
+
+### 3.2 Sign
+
+For RSA, signing applies the private exponent to a padded hash of the payload we want to sign. We sign a hash of the message rather than the payload itself for three reasons:
+
+1. The fixed-size digest always fits within the modulus.
+2. Hashing destroys the algebraic structure that would otherwise let attackers forge signatures.
+3. The signing cost stays constant no matter how large the message is.
+
+Let's look at the process under the hood:
+
+`First, we hash the message m to a fixed-size digest:`
+
+`H = Hash(m)`
+
+`Then we encode and pad the digest into an integer the size of the modulus (this fills the full width of N and adds verifiable structure).`
+
+`M = Pad(H)`
+
+`We can then apply the private exponent to produce the signature:`
+
+`S = M^d mod N`
+
+`Finally, we send the message together with its signature:`
+
+`(m, S)`
+
+This works because only the holder of d can produce an S that, raised to e, yields the correctly-encoded hash. The idea is that anyone can apply the public e, but inverting it to find d requires factoring N, which once again, we take to be classically infeasible for a 2048-bit N.
+
+For ECDSA, signing binds the message hash, the private key, and a fresh random nonce together into a pair of integers. As with RSA, we sign a hash of the message rather than the payload itself, for the same reasons. The fixed-size digest is bounded, hashing destroys exploitable algebraic structure, and the signing cost stays constant regardless of message size.
+
+`We hash the message m to a fixed-size digest:`
+
+`e = H(m)`
+
+`Then we pick a random nonce k in [1, n−1], fresh for every signature.`
+
+`We compute the point k * G and take its x coordinate, reduced mod n, as r``. If r = 0, we start again with a new k:`
+
+r = (k * G).x mod n
+
+`Then we can compute s, which binds the hash e, the private key d, and the nonce k together. If s = 0, we start over with a new k:`
+
+`s = k⁻¹(e + d·r) mod n`
+
+`The signature is the pair:`
+
+`(r, s)`
+
+This works because only the holder of d can compute a valid s, since s ties the hash e, the private key d, and the nonce k together. Without d, you can't produce an (r, s) that verifies.
+
+### 3.3 Verify
+
+In order to verify, RSA uses the public exponent e to undo the private key operation and confirm the signature genuinely came from the holder of d. The verifier has the message m, the signature S, and the signer's public key (N, e).
+
+First, we can recover the padded value from the signature by applying the public exponent:
+
+`M' = S^e mod N`
+
+Then we can undo the padding on M' to extract the recovered hash:
+
+H' = Unpad(M')
+
+`Next, we independently hash the received message:`
+
+`H = Hash(m)`
+
+Finally, we check that the two hashes match:
+
+`H' = H`
+
+`If they match, the signature is valid. If not, reject.`
+
+This works because S = M^d mod N, so raising it to e reverses the operation:
+
+`S^e ≡ (M^d)^e ≡ M^(e·d) ≡ M (mod N)`
+
+Since:
+
+`e·d ≡ 1 (mod ϕ) (where the same e and d are used in reverse order)`
+
+Only the holder of d could have produced an S that maps back to the correctly-padded hash. Anyone can apply the public e, but inverting it to recover d requires factoring N, which (again), we assume classically infeasible for a 2048-bit N.
+
+To verify with ECDSA, the verifier has the message m, the signature (r, s), and the signer's public key Q. The idea is to reconstruct a point from the public values and check that its x-coordinate matches r.
+
+`First, we check that r and s both lie in [1, n−1], rejecting the signature otherwise. Then we independently hash the message:`
+
+`e = H(m)`
+
+`Next, we compute two scalars:`
+
+`u1 = e·s⁻¹ mod n u2 = r·s⁻¹ mod n`
+
+`We then can compute the verification point P:`
+
+`P = u1 * G + u2 * Q`
+
+`Finally, the signature is valid if P's x coordinate, reduced mod n, equals r. Otherwise, reject:`
+
+P.x mod n = r
+
+This works because substituting Q = d·G and s = k⁻¹(e + d·r) collapses the verification point back to k * G, whose x-coordinate is r by construction. The algebra only closes if the signer knew d. Writing the reduction out, we get:
+
+`u1·G + u2·Q = (e·s⁻¹)G + (r·s⁻¹)(d·G) = s⁻¹(e + r·d)·G = s⁻¹·(s·k)·G = k·G`
+
+Notice that the security of this scheme rests on k being chosen well. We see this in the signing equation:
+
+`s = k⁻¹(e + d·r)`
+
+If we reuse the same k across two different messages and an attacker has two equations in two unknowns (d and k), which can be solved directly for d. The private key falls out of nothing more than the public signatures. The [Sony PlayStation 3 signing key](https://fail0verflow.com/blog/2010/ps3-security/) was recovered in 2010 because the same static k was reused across signatures. Closer to the blockchain world, a number of early Bitcoin wallet thefts were traced to weak random number generators that produced repeated k values, so this is a very real attack vector. This brings us nicely to the security properties of digital signatures that must hold true for us to be able to consider them secure.
+
+### What properties should a secure signature scheme have?
+
+For a signature scheme to be considered secure it should have the following properties:
+
+1. Correctness
+2. Unforgeability
+3. Authentication
+4. Integrity
+5. Non-repudiation
+
+**Correctness** (also known as completeness) is the property that the scheme works and does not return false negatives. Formally: for every keypair produced by keygen, and every message, if you sign that message with the private key, then verify with the matching public key, verification always returns success. Think of a lock and key, before it's worth worrying about whether someone can pick the lock, we need to ask ourselves, does the correct key actually open it?
+
+**Unforgeability** is the central security property of signature schemes. Informally it means an attacker who doesn't hold the private key cannot produce a signature that verifies. This is the most important property for a digital signature scheme.
+
+Let's get a bit more specific. Why is "an attacker can't produce a valid signature" an inadequate definition? Because it doesn't account for what the attacker knows. In the real world the attacker can see thousands of legitimate signatures, so a definition that only holds when the attacker has seen nothing isn't worth much. A security definition should account for the attacker's starting resources honestly, and then say what they still can't do. The breakthrough came in 1988, when [Goldwasser, Micali and Rivest published](https://doi.org/10.1137/0217032) the first signature scheme provably secure against an adversary who receives signatures for messages of their choice, where each message may be chosen in a way that depends on the signatures of previously chosen messages, and still cannot later forge the signature of an additional message. That definition: **existential unforgeability under chosen-message attack** (EUF-CMA), is still the standard a signature scheme is held to today.
+
+The honest model is the **signing oracle**: the attacker can submit messages of their choice and get back valid signatures, as many as they like, all while never seeing the private key. EUF-CMA says that even with this power the attacker still can't forge. It's clearer if we read the acronym backwards: the chosen-message attack means the attacker has the freedom to pick the messages (adaptively, each query depending on the last). Existential forgery means that they produce a signature on some fresh message of their choosing. This is the weakest win condition an attacker has so ruling it out gives us the strongest guarantee.
+
+The formal game looks something like this: Alice generates a keypair and gives Mallory the public key. Mallory can query the signing oracle adaptively, and outputs a pair (m*, σ*). Mallory wins if verify(pk, m*, σ*) accepts and m* was never queried. No efficient attacker should win with more than negligible probability.
+
+So why this out as a game? Because "unforgeable" is a promise the whole system leans on. Like most things in cryptography, we need to be precise about what the promise covers. Notice the freshness requirement sits on the message m*, not on the pair (m*, σ*). If Mallory takes a message genuinely signed by Alice and reshapes the signature σ into a different valid σ' on that same message, she hasn't produced a fresh message. By the definition of our game, that doesn't count as a win, and a scheme can be fully EUF-CMA "secure" while allowing it. This is the exploit that was used to steal hundreds of thousands of bitcoin from the [Mt.Gox exchange](https://www.mtgox.com/) in 2014, so clarity about the security assumptions matters.
+
+**Authentication** means a valid signature proves the message came from the holder of a specific private key. In a practical sense: If verify(pk, m, σ) returns true, then whoever produced σ knew sk. The keypair is mathematically linked, so a signature that checks out under pk could only have been made with the matching sk. Since only the signer holds sk, a valid signature points back to them.
+
+One caveat worth noting is that authentication binds a message to a key, not to a person. The scheme proves "sk signed this", but it does not know whose key that is. Linking pk to a real identity ("this key actually belongs to Alice") is a separate job done by **public key infrastructure** (PKI) which is a system where a trusted authority signs statements of the form "this public key belongs to this identity". Signature gives you key-binding but we need PKI to give us identity-binding on top. Conflating them is a common error and that gap is exactly what **substitution** **attacks** can exploit.
+
+**Integrity** is any change to the signed message that makes verification fail. If verify(pk, m, σ) returns true, the message is exactly the same as when it was signed. The signature is computed over the specific message. Change the message and the signature no longer matches it, so verification rejects.
+
+`σ = Sign(sk, m)`
+
+verify(pk, m, σ) = 1 // payload is unchanged
+
+`verify(pk, m', σ) = 0 // payload has been altered`
+
+It's also worth noting that signatures don't tend to sign the payload directly, they sign its **hash** (a fixed-size fingerprint of the message; any change to the input produces a different output). So really σ = Sign(sk, H(m)), and verification recomputes H(m) and checks it. This is **hash-then-sign**. The integrity of the message then rests on the security properties of the hash.
+
+Recall collision resistance: it's should be infeasible to find two different messages such that:
+
+`m ≠ m' with H(m) = H(m')`
+
+If an attacker could find a collision, they'd swap m for m' under the same valid signature and integrity would break, the signature can't tell the two apart because it only ever saw the hash. The distinction to keep clear is:
+
+- **Integrity** -> the message hasn't been altered
+- **Authentication** -> the message came from this key
+
+The last security property of signatures this report will cover is **non-repudiation**. Put simply, this property says the signer cannot later deny they signed. A valid signature is evidence a third party can check, so that Alice can't sign something and then credibly claim she didn't. Only Alice holds sk, and anyone can verify σ against her pk without needing any secret of their own. So a valid signature is proof that points to Alice and a third party can confirm independently.
+
+Non-repudiation carries quiet assumptions and rests on other properties:
+
+1. Private-key secrecy: if sk leaks, anyone could have signed, and the "only Alice could have signed this" guarantee disappears. Non-repudiation is only as strong as key hygiene.
+2. Exclusive ownership: a signature must bind to exactly one keypair. If a substitution attack lets a second key validate Alice's signature, then "only Alice's key verifies this" is inherently false, and the binding that non-repudiation needs is broken.
+
+So non-repudiation is not a primitive guarantee the scheme hands us cleanly. It's built on top of unforgeability, secrecy, and exclusive ownership. That's exactly why it matters: custody and blockchain systems lean on non-repudiation, and it's the property with the most assumptions hiding underneath.
+
+---
+
+## 4. Zero-Knowledge Proofs
+
+Zero-knowledge proofs (ZKPs) are worth understanding because they underpin a lot of the blockchain infrastructure that has to be secured against CRQCs, and like every primitive we have met so far, their post-quantum safety depends entirely on the assumptions they are built on. Most of the primitives we have met so far sit on the classical side of the line between classical and PQ schemes. ZKPs are unique in the fact that the same primitive either falls to CRQCs or doesn't depending only on what hard problem they are built on.
+
+This is the last section before we meet the quantum section of this report. It's important to start with a disclaimer here: a zero-knowledge proof is an interesting but abstract mathematical concept. How these actually work would take a report in and of itself. We will touch on the concept and what they are through a cryptographic lens, but this is not a load-bearing section of this report.
+
+### What is a zero-knowledge proof?
+
+A **proof** is an evidence based logical argument to convince someone of the truth, validity, or existence of a fact. More formally, a proof can be defined as: "a sequence of deductive steps that shows a mathematical or scientific statement is correct based on established axioms and rules". A **zero-knowledge proof** lets one party convince another that a statement is true, while revealing nothing beyond the fact that it's true. It sounds unintuitive because it is.
+
+This real world example might make it a bit more clear. Imagine we are playing a game of Where's Wally? (or Waldo for the American readers). We need to prove that we have found Wally without revealing where he is on the page and spoiling it for the other players. We could do it like this: we take an opaque barrier like a piece of card larger than the page with a small hole in it. We can position the card over the page so that the hole reveals only Wally and the card hides the page. We have proven to other players we have found him without revealing his location. Additionally, a player who has not found Wally simply cannot line the hole up over him, so they are unable to cheat in this way. In practice this is not actually an example of a real zero-knowledge proof because a physical card leans on hidden geometry and we have to trust the page is positioned so the hole's location leaks nothing. A real ZK proof doesn't trust physical setup at all and should get the same guarantee from randomness and maths.
+
+The everyday way we prove we know a secret is to show it. We prove we know a password by typing it, and we prove we are over 18 by showing an ID with your birthdate. The verifier believes us because they now know our password and birthdate.
+
+A zero-knowledge proof lets you prove the statement ("I know the password" or "I am over 18") is true, without revealing the secret behind it. The verifier ends up certain the statement is true, and knows nothing more than that.
+
+A ZK proof is defined by three core properties:
+
+1. Completeness
+2. Soundness
+3. Zero-knowledge
+
+The first defining property is **completeness**. Completeness means that if the statement is true and the prover is honest, the verifier will be convinced. In terms of our Where's Wally? example: if we really have found Wally, we can position the hole over him, and the other players will be convinced we have found him every time. If a true claim can't reliably convince the verifier, there's no point in us running it. It doesn't say anything about cheating, it only promises the honest case is accepted.
+
+The next property is **soundness**. It tells us that if the statement is false, no cheating prover can convince the verifier (except with negligible probability). Back to our example, if we haven't found Wally, we have no way to line the hole up over him so we can't cheat. Soundness is what stops the proof being an empty gesture and tells us that a successful proof reflects a true claim. Completeness protects the honest prover but it's soundness that protects the verifier from a dishonest one.
+
+The final (and namesake) property of these proofs is **zero-knowledge**. This property tells us that the verifier learns nothing beyond the fact that the statement is true. In Wally terms, the players end up certain we found him, yet they still know nothing about where he is on the page and the secret (his location) is not leaked. This is the counterintuitive property, and it's a bit harder to pin down formally. "Learns nothing" can be made concrete by saying a simulator (an algorithm that fakes a convincing transcript without knowing the secret) could have produced the same view, so if the interaction was forgeable by someone who knows nothing, the real interaction can't have leaked anything either.
+
+### Zero-knowledge proofs and digital signatures
+
+A digital signature (just like we have already met in depth) proves you hold the private key matching a public key, and it proves it without revealing the private key. You might have noticed that this is exactly a zero-knowledge proof of knowledge: a demonstration that you know a secret, convincing to anyone, that leaks nothing about the secret itself. Technically speaking a digital signature is known as a **non-interactive zero-knowledge proof of knowledge** of the private key. A signature is a ZKP focused on one specific statement: "I know the private key for this public key." The zero-knowledge proof is the general tool it's an instance of.
+
+---
+
+## 5. The Quantum Threat
+
+We have now reached the second, PQ part of this report. Every section from now until the end will cover the threat of CRQCs to classical schemes and the migration to PQ schemes.
+
+To recap, most of the internet and digital systems we use today are secured by the classical cryptography we have met so far. We believe these classical primitives and schemes to be secure because breaking them requires reversing hard problems efficiently, which we believe to be infeasible with our current classical computers. A sufficiently powerful quantum computer, however, would be able to reverse these problems.
+
+The quantum threat runs on two timelines. For confidentiality, the threat already exists. An adversary can capture encrypted traffic today, store it until a CRQC exists, and then decrypt it. This "harvest now, decrypt later" (HNDL) attack means the deadline to complete key exchange migration is Q-Day minus the data's needed confidentiality lifetime (and minus the time migration itself takes). Anything that must stay secret for years is already at risk, so migrating key establishment schemes should be a priority now.
+
+Authentication is different, because a signature has no harvest value and storing one shouldn't benefit an attacker, since we can't change a verification that has already occurred. The threat instead is at verification time on or after Q-Day. A CRQC would let an attacker forge new signatures under any key still trusted.
+
+So signature migration is less time-critical than confidentiality, but harder in practice. Long lived trust anchors, firmware keys, and blockchain keys are embedded in hardware and deployed systems that are slow, costly, or hard to update. HNDL makes confidentiality migration urgent now, while signature migration isn't under threat from HNDL attacks, but is difficult.
+
+### What is a classical computer?
+
+We have been talking about QRQCs a lot so far, but how do they actually differ from a classical computer? Classical computers are essentially built from billions of tiny on/off switches called **transistors**. These transistors store information as a single **bit**, on means 1, off means 0. Everything they can do boils down to some sequence of operations manipulating those bits. This is the machine all of our security estimates in this report have assumed so far. When we said factoring a 2048-bit number would take longer than the age of the universe, we assumed it was a classical computer running the best classical algorithm we know. The whole reason RSA and Diffie-Hellman are considered secure today is that no classical computer can work through the discrete log problem or the factoring problem fast enough to even come close to mattering at cryptographic sizes. Essentially, a classical attacker is stuck doing the maths the slow way, and the slow way takes way too long.
+
+### What is a quantum computer?
+
+It's important to start by mentioning that quantum computers work by using the principles of quantum mechanics, which is a notoriously unintuitive and hard topic to understand. Renowned physicist Richard Feynman once said "I think I can safely say that nobody understands quantum mechanics". The good news as a cryptographer is we don't need to. What matters isn't how a quantum computer works, but what it can and can't break.
+
+A quantum computer is not a faster classical computer. Instead of bits, quantum computers use qubits, and a qubit is not fixed to either 0 or 1 but can also be a combination of both simultaneously. They only become a definitive 0 or 1 once they are measured, a property that comes from a phenomenon in quantum mechanics (which we won't get into here) called **superposition**. QCs can link many qubits together through a second phenomenon called **entanglement**. Using these properties of qubits, a QC can (very loosely put) explore many possibilities at the same time rather than strictly one at a time.
+
+All we need to know is that this does not make quantum computers better than classical computers in general, in fact, for most tasks they are highly inefficient. What matters for cryptography is that a small handful of problems have quantum algorithms that are dramatically faster than anything classical. It just so happens that by a very unlucky coincidence two of those problems happen to be (spoiler alert) factoring and the discrete log problem. A machine that can run those algorithms at scale is what we have been calling a CRQC. Again, these don't exist yet but as of June 2026, [estimates](https://report.projecteleven.com/) say that Q-Day is more likely to occur than not by 2033, and potentially as soon as 2030.
+
+CRQCs will not impact symmetric and asymmetric equally. Symmetric cryptography including hashes, AES and SHA-256, comes off pretty light. The best known post quantum attack against symmetric encryption is known as **Grover's algorithm**, and it can potentially halve the security of symmetric schemes, but there is also research saying that even this is overstated and AES 128 could still be considered secure. Any real world risk (if any) from a CRQC could be undone by doubling the key size.
+
+Asymmetric cryptography, the RSA, Diffie-Hellman, and elliptic-curve schemes take a bigger hit however. A quantum algorithm known as **Shor's algorithm** solves factoring and the discrete logarithm problems at a superpolynomial speedup compared to the best known classical schemes. If you recall these are the two exact hard problems that our classical asymmetric schemes such as RSA and ECC stand on.
+
+---
+
+## 6. Quantum and Symmetric Encryption
+
+Grover's algorithm is a quantum search algorithm developed in 1996 by computer scientist Lov Grover. Running on a quantum computer, it finds a specific item in an unsorted database of N entries in roughly √N steps, offering a quadratic speedup over the best possible classical approach, which requires checking on average N/2 entries.
+
+It is essentially a fast way to search an unstructured space, a "pile" with no order to exploit. Classically, the best approach is to try things one by one. This is exactly how brute forcing a symmetric key works. If you recall from the bits of security section, bits of security = log₂ of the work the best attack needs and brute forcing an n bit key will take roughly 2^n guesses.
+
+So for an n-bit key with no better attack than brute force:
+
+`Classical brute force: log​``2``(2``n``) = n bits of security`
+
+Through Grover's algorithm, the square root of the work is a halving of the exponent. Since bits of security is the exponent, Grover's quadratic speedup in work becomes a halving in bits:
+
+`Grover's algorithm: log​``2``(2``n/2``) = n/2 bits of security`
+
+So, a CRQC capable of running Grover's algorithm against AES-128, which we still consider secure today, could render it insecure with only 64 bits of security. The pattern becomes pretty clear. As we already mentioned, to keep k bits of security against a CRQC running Grover's algorithm, we simply have to use a 2k-bit key.
+
+It is also important to note that Grover's doesn't halve everything symmetric by the same factor. The "double the key" rule applies to symmetric ciphers and to the preimage resistance of hash functions, where finding an input for a given output is just a search problem. Collision resistance is different though, and the quantum speedup is less dramatic. In many realistic models the practical advantage over classical collision attacks is even negligible. So, Grover's halves the effective security of keys and hash preimages.
+
+---
+
+## 7. Quantum and Asymmetric Cryptography
+
+Asymmetric cryptography is where the real quantum threat lies. In 1994, an American mathematician named Peter Shor developed two closely related quantum algorithms: one for finding the prime factors of an integer, and one for solving the discrete logarithm problem.
+
+These algorithms are grouped together and are commonly referred to under the shared name **Shor's algorithm**, because they share the same core subroutine and are closely related. Factoring and the discrete log are just specific problems that Shor's algorithm reframes so that solving them reduces to finding the **period of a sequence**, exactly what a CRQC can do efficiently. This is exactly where the threat to asymmetry comes from. The security of our classical asymmetric schemes rest entirely on these problems being hard, which they are not for a CRQC capable of running Shor's algorithm
+
+### Period and the factoring problem
+
+Let's take a look at how our hard problems reduce to the problem quantum computers excel at. Starting with factoring:
+
+`Take the powers of some number``a``modulo``N``:`
+
+`a¹, a², a³, a⁴, … (mod N)`
+
+Since every term is a remainder, there are only N possible values, so the sequence can't keep producing new numbers forever, there must be a repeat.
+
+`When the cycle repeats, there is some smallest number``r``where:`
+
+`aʳ ≡ 1 (mod N)`
+
+`The values we see for exponents 1 through``r``reappear in the same order for``r``+1 through 2``r``.`
+
+`That repeat length``r``is the`**period**`.`
+
+A quick, very small example:
+
+Take the powers of 3 modulo 7:
+
+`3¹ = 3, 3² = 2, 3³ = 6, 3⁴ = 4, 3⁵ = 5, 3⁶ = 1, 3⁷ = 3, …`
+
+`The sequence is:`
+
+`3, 2, 6, 4, 5, 1, 3, 2, 6, 4, 5, 1, …`
+
+`and it cycles every six steps.`
+
+`This gives the period:`
+
+`r``= 6`
+
+In our example case, finding the period is trivial, we can just list the whole sequence and spot the cycle by eye. In practice however, N is hundreds of digits long, and our period r can be extremely large, too large to trivially find by sampling. Classically, locating the period of a sequence defined over a number as large as an RSA modulus takes super-polynomial time, and with no known shortcut to exploit, this operation is considered infeasible for classical computers.
+
+A quantum computer however, can evaluate a^x mod N across a huge range of exponents simultaneously. This gives us a single state that contains the entire periodic pattern. Shor's algorithm uses the quantum **Fourier transform** to break down this pattern into frequency components, revealing the period r in essentially one shot.
+
+Once we have the period r, recovering the factors is a quick classical step:
+
+`If r is even, and a^(r/2) ≢ −1 then:`
+
+a^(r/2) − 1
+
+`and`
+
+`a^(r/2) + 1`
+
+`share a common factor with N, and finding the greatest common divisors gives us p or q.`
+
+Once we have r, factoring N becomes easy so finding the period is essentially what the hard factoring problem reduces to. Our classical schemes rely on this being infeasible.
+
+### Period and the discrete log problem
+
+As mentioned earlier, factoring is not the only hard problem Shor's period finding affects. Recall the discrete logarithm problem from the Diffie-Hellman exchange:
+
+`Given a public value:`
+
+`A = gˣ mod p`
+
+`recover the secret exponent: x`
+
+Classically this is infeasible for cryptographics sizes, and is what the security of Diffie-Hellman and ECC rests on. Again this problem can be reduced to finding a hidden period.
+
+`Consider a function of two variables: f(a, b) = g^a * A^-b mod p Since A = g^x the function takes the same value whenever a − b * x lands on the same point.`
+
+The function takes the same value whenever a − b * x lands on the same point, meaning it's periodic. That period will encode the hidden exponent x, just like with factoring.
+
+A classical computer cannot see that periodicity without effectively solving the discrete log directly. A quantum computer evaluates the function across a huge range of inputs at once, and again, a quantum Fourier transform extracts the hidden period, giving us x. The exponent that no classical attacker can recover becomes trivial to find with Shor's algorithm.
+
+### Why we can't just use bigger keys
+
+With a CRQC capable of running Shor's algorithm, the difficulty that protects asymmetric security doesn't just shrink like it does with symmetric, it falls down completely. The difference is the kind of speedup. Grover's halves the exponent, so larger keys still help, while Shor's runs in time polynomial in the number of bits of the modulus. We can't just outrun a polynomial-time attack by enlarging the key, because the attack scales almost as easily as the key does.
+
+For RSA, the modulus has n bits. The best known classical attack (general number field sieve) has a sub-exponential runtime:
+
+`Classical (GNFS): exp [ O(n^(1/3) * (log n)^(2/3)) ]`
+
+Classical security does grow with key size, just not as fast as 2ⁿ:
+
+Shor collapses this run time to:
+
+`Quantum (Shor's): O(n³)`
+
+This means that we can't simply double the key size here to preserve the security of our classical asymmetric schemes like we can with symmetric. We need to turn to migrating to different, post-quantum schemes for key exchange and digital signatures that don't fall vulnerable to Shor's algorithm.
+
+---
+
+## 8. Introduction to Post Quantum Key Exchange
+
+Let's take a moment to remember what a key exchange actually is. A key exchange's sole purpose is to let two parties (who have never met) agree on a shared secret over a public channel, in such a way that an attacker listening cannot recover it.
+
+Classically this can be achieved with Diffie-Hellman and ECC, with the security of both resting on the discrete logarithm problem. Since we can't just increase the length of our keys, we need a new key exchange scheme built on a problem that doesn't fall to Shor's algorithm.
+
+In August 2024, after an eight-year public competition, NIST published the first standard for a PQ key exchange scheme: [FIPS 203](https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.203.pdf). FIPS 203 specifies [Module-Lattice-Based Key-Encapsulation Mechanism](https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.203.pdf) ([ML-KEM](https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.203.pdf)). The scheme was published under the original name 'Kyber' and was later changed to the standardised name ML-KEM. 'Kyber' can still be seen in older papers and code. ML-KEM is now the primary post-quantum standard for key establishment, and it is what the migration from classical key exchange is built around.
+
+Just like before rather than both sides contributing to a shared value, ML-KEM let's one party use the other's public key to generate a fresh shared secret and a ciphertext that carries it, and only the holder of the matching private key can decipher that ciphertext to recover the secret. The security rests on a **lattice** problem called **Module Learning With Errors** (Module-LWE). We will take a closer look at lattice cryptography and how it works in [§9](#h.l2cal44dvm04).
+
+For now, the basic intuition is that ML-KEM hides the secret inside a system of linear equations deliberately polluted with small random errors. Without the private key, separating the signal from the noise is believed to be hard even for a quantum computer, because no known quantum algorithm gives the kind of speedup against lattice problems that Shor gives against factoring and discrete log. FIPS 203 defines three parameter sets: **ML-KEM-512**, **768**, and **1024**, targeting roughly the security of AES-128, AES-192, and AES-256 respectively.
+
+The cost of this quantum resistance is size. An ML-KEM-768 public key is around 1,184 bytes and its ciphertext around 1,088 bytes, against roughly 32 bytes for an X25519 public key doing the same job classically. That's a big cost for protocols that open many connections.
+
+The dominant deployment pattern today known as **hybrid** encryption doesn't reduce it. Hybrid runs a classical exchange like X25519 and ML-KEM together and derives the session key from both. The reason to do this is security not efficiency. The connection stays safe as long as either primitive holds, which hedges against ML-KEM being newer and less tested while still defending against HNDL attacks.
+
+This is already live as of 2026. Major browsers and TLS 1.3 stacks rolled out hybrid X25519+ML-KEM key exchange through 2024 and 2025, so a large fraction of HTTPS traffic is already protected against a future CRQC recording it today.
+
+---
+
+## 9. Introduction to Post Quantum Digital Signatures
+
+Digital signatures are the harder part of the migration to PQ schemes. The reason is not that signatures are more vulnerable to Shor's algorithm, but that signatures are wired deeper into systems that are difficult to change. A TLS session key lives for minutes, while a signature on a root certificate, a piece of firmware, or a blockchain's signing scheme can be working for years. Replacing these is slower, and the schemes we replace them with carry more cost than key exchange schemes.
+
+Just like with key exchange, NIST ran a multi-year public competition and, in August 2024, published the standards we are now migrating towards. [FIPS 204](https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.204.pdf) specifies **ML-DSA** (Module-Lattice-Based Digital Signature Algorithm), submitted under the name Dilithium, and [FIPS 205](https://nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.205.pdf) specifies **SLH-DSA** (Stateless Hash-Based Digital Signature Algorithm), submitted as SPHINCS+. ML-DSA is NIST's main recommendation, the default to reach for unless you have a specific reason not to.
+
+### Lattice based schemes
+
+This divides NIST's signature standards into two families of problems their security rests on under the hood: lattice-based and hash-based. ML-DSA is **lattice-based**. It's security rests on the difficulty of two lattice problems:**Module Learning With Errors** (the same problem as ML-KEM from the last section) and **Module Short Integer Solution**.
+
+The intuition is the same as ML-KEM, where the secret is hidden inside a system of linear equations deliberately polluted with small errors, and recovering it means finding a short vector in a high-dimensional lattice, which is believed to be hard even for a quantum computer. But what actually is a lattice?
+
+Imagine a grid of points in space. In two dimensions this is just like graph paper, but the version we use in cryptography has hundreds of dimensions. You reach any point on the grid by taking whole-number steps along a fixed set of direction vectors and adding them up, and that set of directions is called a **basis**.
+
+The same grid can be described by many different bases, and which one you hold decides whether the grid is easy or hard to work with. A "good" basis is made of short, nearly perpendicular directions, a "bad" basis is made of long, skewed directions that all lean nearly the same way. The hard problem at the centre of lattice cryptography is this: given an arbitrary spot, find the lattice point closest to it. With a good basis it is quick; with a bad basis, no efficient method is known, classical or quantum.
+
+The good basis is kept secret as the private key, and a bad basis for the same lattice is published as the public key. Anyone can verify a point sits on the grid, but only the holder of the good basis can find the nearest one on demand. The same idea is more often written as algebra than geometry, because computers reason about equations more easily than multi-dimensional grids. In that form it's called Learning With Errors, the same problem behind ML-KEM. We start with ordinary linear equations, then add a small random error to each one so that every equation is almost right but not quite.
+
+Without the errors, anyone could solve for the unknowns by elimination; with them, that elimination falls apart, because each tiny wrongness compounds as the equations combine. The secret structure that strips the noise back off is the good basis again, just written as an equation. ML-DSA's security rests on the difficulty of this problem (specifically two variants, Module-LWE and Module Short Integer Solution): recovering a short hidden vector from noisy, public information, which is believed to be hard even for a quantum computer.
+
+### Hash based schemes
+
+SLH-DSA It builds signatures out of nothing but hash functions, the primitives we met all the way back in [§1.2](#h.mu75tr4wn272). It assumes no algebraic structure at all, only that the underlying hash is secure: hard to invert and hard to find collisions in. How SLH-DSA builds signatures from hash functions is a bit of a technical rabbit hole beyond the scope of this report, but the idea is that a hash can be used to make a tiny one-time signature. This small signature is good for signing a single message, and SLH-DSA stitches enormous numbers of these together into a tree so that one long-lived public key can sign practically unlimited messages. The "stateless" in its name (the SL in SLH) means the signer doesn't have to remember which one-time keys it has already used.
+
+That difference between lattice and hash based schemes is exactly why both exist. Lattice signatures are efficient: ML-DSA is fast to sign and verify and produces signatures measured in low thousands of bytes. Hash-based signatures are slow and bulky, with signatures running into tens of kilobytes, but they rest on a foundation we have trusted for decades and that has no known structural weakness. If a flaw is ever found in lattice problems, ML-DSA would be affected and SLH-DSA would not. So these two families aren't competitors, they have different uses. We primarily rely on ML-DSA for everyday use, and SLH-DSA held in reserve for the cases where conservatism matters more than size, like root certificates and long-lived firmware. The following table below lays out a quick comparison.
+
+### PQ digital signature schemes comparison
+
+| **Scheme (FIPS)** | **Family** | **Signature size** | **Main benefit** | **Where it fits** |
+| --- | --- | --- | --- | --- |
+| **ML-DSA-44** (204) | Lattice | 2,420 B | Best all round balance, simple to implement safely | NIST default: TLS, code signing, most migration |
+| **ML-DSA-65** (204) | Lattice | 3,309 B | Strong security, still fast | The common enterprise middle choice |
+| **ML-DSA-87** (204) | Lattice | 4,627 B | Highest lattice security level | High-assurance, long-lived signatures |
+| **SLH-DSA "s"** (205) | Hash-based | ~8–30 KB | Most conservative security, small public keys | Root CAs, firmware, long-term archival |
+| **SLH-DSA "f"** (205) | Hash-based | ~17–50 KB | Faster signing than "s" | When signing speed beats bandwidth |
+
+The headline cost of all of these schemes is size, and it matters in comparison to what we are replacing. An ECDSA signature on the P-256 curve is 64 bytes, so an ML-DSA-65 signature at roughly 3,300 bytes is about 50 times larger. Public keys grow too, from 64 bytes for ECDSA to between 1,300 and 2,600 bytes for ML-DSA, though hash-based SLH-DSA is the exception with tiny public keys of 32 to 64 bytes, paying for it in signature size instead.
+
+The divider is the problem each family trusts to be hard. ML-DSA rests on lattice problems (Module-LWE and Module-SIS), which are efficient and fast to sign and verify, but are a newer and more structured assumption. SLH-DSA rests on nothing but the security of hash functions, the most conservative assumption in the suite. If a weakness in lattice maths is ever found, ML-DSA deployments are affected and SLH-DSA deployments are not. The "s" and "f" variants are the same scheme tuned in opposite directions: "s" for smaller signatures at the cost of slower signing, "f" for faster signing at the cost of even larger signatures.
+
+One more scheme is worth mentioning (despite not being included in the table) is FN-DSA, based on FALCON, produces the smallest post-quantum signatures of any of these (around 666 bytes), but it is still in draft as FIPS 206 and is notoriously hard to implement safely, relying on floating-point operations that are prone to side channel leaking. That difficulty is why ML-DSA, not FALCON, was chosen as the primary recommendation: smaller is not worth much if the implementation could leak the key.
+
+---
+
+## Conclusion
+
+Across the nine sections and two halves, one idea holds this report together: cryptography relies on assumptions. AES is only believed to be a pseudorandom permutation, nobody has proven it. Factoring and the discrete logarithm are only believed to be hard, and the best evidence is decades of clever people failing to do better than GNFS. Even the one-time pad, the single scheme we can actually prove secure, ends up being impractical to use. The lattice and hash assumptions behind the PQ standards are only different in age. Everything we trust cryptographicly rests on problems nobody has managed to break yet. The real skill of a cryptographer is knowing exactly which "yet" they are working around.
+
+Remember, the PQ threat comes from some problems that we are worried will be solvable soon. If this happens, the security of symmetric cryptography bends, while asymmetric cryptography breaks, purely due to the problems they rest on. The migration is therefore, first and foremost, an asymmetric problem encompassing key exchange and digital signatures. The schemes replacing them simply aim to swap one set of believed hard problems, factoring and discrete log, for a newer set, lattices and hashes. But this comes with a cost in size.
+
+The maths is largely done. The standards are published, the implementations exist, and the performance is good enough that hybrid key exchange is already carrying a real portion of HTTPS traffic today.
+
+What is not done yet is everything else around that maths. Keys and signatures an order of magnitude larger than the ones they replace still have to be fitted into protocols, certificates, and formats designed decades ago, and the migration itself has only just begun. This is where this (rather lengthy) report ends and the work begins.
+
+The content covered in this report is intended to get a new engineer up to speed. What are the classical primitives, why they hold, what a CRQC breaks, and what PQ standards could replace them. Implementing that migration, and helping the new assumptions earn the years of scrutiny they need, that's the work that still has to be done.
