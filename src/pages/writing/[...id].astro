@@ -1,6 +1,5 @@
 ---
 import Base from '../../layouts/Base.astro';
-import ArticleToc from '../../components/ArticleToc.astro';
 import { getCollection, render } from 'astro:content';
 import { monthYearLong } from '../../lib/date';
 
@@ -10,7 +9,7 @@ export async function getStaticPaths() {
 }
 
 const { post } = Astro.props;
-const { Content, headings } = await render(post);
+const { Content } = await render(post);
 
 const byline = [
   post.data.author,
@@ -19,18 +18,16 @@ const byline = [
 ].filter(Boolean).join(' · ');
 ---
 
-<Base title={post.data.title} description={post.data.description} wide>
-  <a class="back-link" href="/writing/">← writing</a>
-  <div class="article-layout">
-    <ArticleToc headings={headings} />
-    <article>
-      <header class="article-head">
-        <h1>{post.data.title}</h1>
-        <div class="article-meta">{byline}</div>
-      </header>
-      <div class="prose article-prose">
-        <Content />
-      </div>
-    </article>
-  </div>
+<Base title={post.data.title} description={post.data.description}>
+  <article class="article-main">
+    <a class="back-link" href="/writing/">← writing</a>
+    <header class="article-head">
+      <h1>{post.data.title}</h1>
+      <div class="article-meta">{byline}</div>
+    </header>
+    <div class="prose article-prose">
+      <Content />
+    </div>
+    <a class="back-link back-link-bottom" href="/writing/">← writing</a>
+  </article>
 </Base>
