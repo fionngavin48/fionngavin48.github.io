@@ -1,19 +1,11 @@
 ---
 import Base from '../../layouts/Base.astro';
 import { getCollection } from 'astro:content';
-import { monthYearLong } from '../../lib/date';
+import { postByline } from '../../lib/blog';
 
 const posts = (await getCollection('blog', ({ data }) => !data.draft)).sort(
   (a, b) => b.data.publishedAt.valueOf() - a.data.publishedAt.valueOf(),
 );
-
-function postByline(post: (typeof posts)[number]): string {
-  return [
-    post.data.author,
-    monthYearLong(post.data.publishedAt),
-    post.data.readingTime,
-  ].filter(Boolean).join(' · ');
-}
 ---
 
 <Base title="Writing" description="My blogs and notes. Security, systems, and what I'm working on.">
@@ -32,7 +24,7 @@ function postByline(post: (typeof posts)[number]): string {
             {posts.map((p) => (
               <div class="post">
                 <a class="post-title" href={`/writing/${p.id}/`}>{p.data.title}</a>
-                <p class="post-meta">{postByline(p)}</p>
+                <p class="post-meta">{postByline(p.data)}</p>
               </div>
             ))}
           </div>
