@@ -4,7 +4,7 @@ summary: "Security validation for a Model Context Protocol gateway and registry 
 type: "security"
 year: 2026
 tags: ["python", "fastapi", "security"]
-repo: "https://github.com/IBM/mcp-context-forge"
+upstream: "https://github.com/IBM/mcp-context-forge"
 featured: true
 writeup: false
 order: 1

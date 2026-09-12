@@ -7,7 +7,8 @@ const projects = (await getCollection('projects')).sort(
 );
 
 const order = ['security', 'systems', 'web', 'research'] as const;
-const present = order.filter((t) => projects.some((p) => p.data.type === t));
+const typesOf = (p: (typeof projects)[number]) => [p.data.type, ...p.data.alsoTypes];
+const present = order.filter((t) => projects.some((p) => typesOf(p).includes(t)));
 const filters = ['all', ...present];
 ---
 
@@ -47,13 +48,13 @@ const filters = ['all', ...present];
         projects.map((p) => (
           <article
             class="project"
-            data-type={p.data.type}
+            data-type={typesOf(p).join(' ')}
             data-name={p.data.title.toLowerCase()}
           >
             <h3>
               <a
                 class="project-title"
-                href={p.data.writeup ? `/projects/${p.id}/` : (p.data.repo ?? p.data.paper ?? p.data.demo ?? '#')}
+                href={p.data.writeup ? `/projects/${p.id}/` : (p.data.repo ?? p.data.paper ?? p.data.demo ?? p.data.upstream ?? '#')}
                 target={p.data.writeup ? undefined : '_blank'}
                 rel={p.data.writeup ? undefined : 'noopener noreferrer'}
               >
@@ -68,6 +69,7 @@ const filters = ['all', ...present];
             <div class="project-links">
               {p.data.writeup && <a href={`/projects/${p.id}/`}>read →</a>}
               {p.data.repo && <a href={p.data.repo} target="_blank" rel="noopener noreferrer">repo ↗</a>}
+              {p.data.upstream && <a href={p.data.upstream} target="_blank" rel="noopener noreferrer">upstream ↗</a>}
               {p.data.demo && <a href={p.data.demo} target="_blank" rel="noopener noreferrer">demo ↗</a>}
               {p.data.paper && <a href={p.data.paper} target="_blank" rel="noopener noreferrer">paper ↗</a>}
             </div>
@@ -90,7 +92,8 @@ const filters = ['all', ...present];
     const applyFilters = (): void => {
       const query = (search?.value ?? '').trim().toLowerCase();
       projects.forEach((p) => {
-        const typeMatch = activeFilter === 'all' || p.dataset.type === activeFilter;
+        const typeMatch =
+          activeFilter === 'all' || (p.dataset.type ?? '').split(' ').includes(activeFilter);
         const nameMatch = query.length === 0 || (p.dataset.name ?? '').includes(query);
         p.toggleAttribute('hidden', !(typeMatch && nameMatch));
       });

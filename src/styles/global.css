@@ -138,6 +138,7 @@ main {
 .experience-list .company-link:hover { color: var(--accent); }
 .experience-list li > div a:not(.company-link) { color: var(--accent); }
 .experience-list .tags { margin-top: 8px; }
+.experience-list .exp-year { font-family: var(--font-mono); font-size: .74rem; color: var(--subtle); }
 
 .muted-copy { color: var(--muted); }
 .see-all { font-family: var(--font-mono); font-size: .78rem; color: var(--muted); transition: color .15s ease; }
