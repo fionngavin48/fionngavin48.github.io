@@ -1,0 +1,267 @@
+---
+title: "SLH-DSA: Signatures From Nothing but Hash Functions"
+description: "How SLH-DSA (FIPS 205) builds a full post-quantum signature scheme out of hash functions alone — WOTS+, Merkle trees, hypertrees, FORS — and where that trade is worth making."
+publishedAt: 2026-08-12
+author: "Fionn Gavin"
+readingTime: "~15 min read"
+draft: false
+tags: ["cryptography", "post-quantum", "signatures"]
+---
+
+import TableOfContents from '../../components/TableOfContents.astro';
+
+Most post-quantum signature schemes bet on a single structured hardness assumption. SLH-DSA bets on nothing but hash functions. A look at how it's built, what it costs, and the narrow set of systems where that trade is the right one.
+
+<TableOfContents headings={props.headings} />
+
+## Introduction
+
+Most digital signature schemes in use on the internet today rely on classically hard problems such as factoring or discrete logs. A sufficiently powerful quantum computer could reverse them efficiently, breaking the security properties these signatures are meant to guarantee. That's why right now, we are in a race to standardize and stress-test post-quantum signature schemes, ones resting on problems that a quantum computer can't reverse easily.
+
+If you're reading this, I'll assume you already have a basic intuition of what a digital signature is and why they matter. If not, read my [introduction to cryptography and the post-quantum migration](/writing/introduction-to-cryptography-and-post-quantum-migration/).
+
+With the current rise in cryptanalysis using frontier AI models, the commonly accepted practice of 'security through scrutiny' is starting to appear a little shakier than was once thought. On July 29th, [HAWK](https://csrc.nist.gov/csrc/media/Projects/pqc-dig-sig/documents/round-1/spec-files/hawk-spec-web.pdf), a NIST post-quantum signature candidate, was withdrawn after Anthropic's Claude Mythos Preview model found an attack that roughly halved its effective security.
+
+On August 3rd, a preliminary draft claiming a [polynomial-time quantum algorithm for the Dihedral Coset Problem](https://eprint.iacr.org/2026/1591) was posted. It hasn't been peer-reviewed, and as of August 11th independent verifiers have found some key gaps, but it's the kind of result that highlights how delicate hardness assumptions can be, even ones as carefully vetted as [ML-DSA](https://csrc.nist.gov/pubs/fips/204/final). Betting on a single hardness assumption means we are always just one proof away from a scheme's security falling.
+
+SLH-DSA is the scheme you pick when you want to bet on nothing but one of the most basic primitives in cryptography: hash functions. Today I want to explore what SLH-DSA actually is, its tradeoffs, and the (admittedly narrow) set of systems where that trade is the right one.
+
+---
+
+## Recap of cryptographic hash functions
+
+A [cryptographic hash](https://en.wikipedia.org/wiki/Cryptographic_hash_function) is a one-way function that takes any-size input and produces a fixed-size output known as a **digest**.
+
+They should do this **deterministically**, meaning that the same input always maps to the same output. That determinism is what makes hashes widely useful, from Git commit IDs to Bitcoin transaction IDs. A *cryptographic* hash needs more than just determinism to be secure; it needs to resist deliberate attack.
+
+Three main security properties matter for this: **preimage resistance**, **second-preimage resistance** and **collision resistance**.
+
+Preimage resistance means that given a digest, it's hard to find the corresponding input. More formally: given a digest h, it's computationally hard to find any input m with:
+
+`H(m) = h`
+
+Second-preimage resistance means that given one input, it's hard to find a different one with the same digest. Formally: given m, it's computationally hard to find any m′ with:
+
+`m′ ≠ m and H(m′) = H(m)`
+
+Imagine someone hands you a signed contract, can you forge a different document that hashes to the same digest, so the original signature still validates? The target is fixed and the attacker has to find a second input that matches.
+
+The last of the three is collision resistance. It means that it's hard to find any two distinct inputs that map to the same output. Formally: it should be computationally hard to find *any pair* m, m' such that:
+
+`m ≠ m' with H(m) = H(m')`
+
+For [SHA-256](https://en.wikipedia.org/wiki/SHA-2), the workhorse hash function on the internet today, breaking preimage resistance (and, for short inputs, second-preimage resistance) costs roughly 2²⁵⁶ operations classically; Grover's algorithm cuts that to about 2¹²⁸ quantum operations in theory. Breaking collision resistance costs only around 2¹²⁸. The [birthday bound](https://en.wikipedia.org/wiki/Birthday_attack) halves the exponent, so collisions are cheaper to find than preimages, though 2¹²⁸ is still considered infeasible today.
+
+It's also important to note that a good hash function should appear structureless. Knowing one digest should tell an attacker nothing about any other, so there's no shortcut to exploit beyond brute force.
+
+### The challenge with building a signature scheme from hash functions
+
+Because hash functions are crucially one way, they have no private shortcut for a scheme designer to build on.
+
+[RSA's](https://en.wikipedia.org/wiki/RSA_cryptosystem) private key is the one piece of information that makes inverting the public operation easy. A secret that lets its holder invert an otherwise hard-to-invert function is known as a **trapdoor**.
+
+[ECDSA](https://en.wikipedia.org/wiki/Elliptic_Curve_Digital_Signature_Algorithm) has no trapdoor in that sense, but its private key is still a secret number with an algebraic relation to the public key, and signing is a proof that you know it. What these schemes share is structure: the private and public keys are two views of the same mathematical object.
+
+This is what sets hash-based schemes apart, a hash function has no exploitable algebraic structure by design and no trapdoor of any kind. There's no secret that makes inversion easy for anyone, including the person who holds it. The private key is just random bytes, only connected to the public key by nothing but one-way hashing.
+
+This raises the question, how *do* we build a signature scheme, something that fundamentally requires a private key only the signer can use, out of a primitive with no private shortcut baked in? That question is the premise of SLH-DSA, and the answer lies in designing a scheme that rests on secrets you can only ever reveal once.
+
+---
+
+## What is SLH-DSA?
+
+A quick pause here for a bit of background on what SLH-DSA actually is, before we dive into how it works.
+
+SLH-DSA stands for Stateless Hash-based Digital Signature Algorithm. It was [submitted to NIST's post-quantum cryptography standardization process](https://sphincs.org) in 2017 under the name SPHINCS+. It advanced through multiple rounds of public scrutiny alongside the lattice-based candidates, and in August 2024 NIST finalized it as [FIPS 205](https://csrc.nist.gov/pubs/fips/205/final), standardizing it under the name it goes by today, SLH-DSA.
+
+At a high level, SLH-DSA builds a full signature scheme out of nothing but a hash function, with no trapdoor and no structured hardness assumption. Its security reduces to a small set of well-studied hash function properties: primarily preimage resistance and second-preimage resistance. Notably, it doesn't depend on collision resistance at all. Even a hash function with broken collision resistance would leave SLH-DSA signatures unforgeable, although a key pair's own owner could still use a collision to produce two messages sharing the same valid signature.
+
+The last security property SLH-DSA rests on is **pseudorandomness**. If we feed a hash function some secret alongside its input, its outputs become unpredictable to anyone who doesn't hold that secret. This is a pseudorandom function and it's what lets a single short seed stand in for an enormous number of independent secret values in SLH-DSA.
+
+---
+
+## Building a signature from hashes
+
+Let's start with the simplest possible example of a hash-based signature. We can pick a random value, keep it secret, and hash it. That hash is our public key. To "sign," we can simply reveal the secret value. Anyone can hash it themselves and check it matches our public key.
+
+<figure>
+  <img src="/writing/slh-dsa/fig-4-1-signing-with-a-hash.png" alt="Key generation hashes a secret value into a public key; signing reveals the secret value and the verifier hashes it and compares to the public key." />
+  <figcaption>Figure 4.1: Signing with a Hash</figcaption>
+</figure>
+
+The signature is simply the act of revealing the preimage. It works because of the preimage resistance property that any cryptographic hash function must have to be considered secure.
+
+It's a beautifully simple scheme with no trapdoor at all. Unfortunately, this mental model is too basic to sign anything useful because it reveals our secret forever after just one use. It also only proves that we know a secret, but it doesn't tie that secret to the specific message we want to sign.
+
+A nice way to think about the SLH-DSA design is that each layer effectively patches the weaknesses revealed by the previous layers, starting with our basic mental model of just hashing some secret. Each design choice solves a problem and hands off a new, smaller problem to the layer above it, until we are left with the SLH-DSA scheme that's standardized today.
+
+A rough overview of the layers that make up SLH-DSA is as follows:
+
+- **Preimage reveal**: reveal a secret that proves you know something, but isn't bound to a specific message or digest.
+- **WOTS+**: a chain of hashes together with a checksum, this binds the signature to the actual message digest, but is still only safe to use once per key.
+- **Merkle trees**: a tree structure that hashes many WOTS+ public keys into a single reusable root/public key, solving the "one key per signature" limit.
+- **Hypertrees**: a tree of trees, each layer signing the root below it, making scaling cheaper compared to constructing one giant Merkle tree.
+- **FORS**: a few-time scheme at the base that tolerates a limited amount of reuse, allowing SLH-DSA to derive each WOTS+ key choice from the message we want to sign. Not having to track and store that choice is what makes the scheme stateless.
+
+### WOTS+
+
+This is effectively just a chain of hashes combined with a checksum, but this is also the concept I find hardest to understand, so let's take a minute to unpack how WOTS+ works in SLH-DSA.
+
+Let's take a secret value and hash it repeatedly, say 7 times, storing the intermediate results. Now we have a hash chain with 8 positions: `{0, 1, 2, 3, 4, 5, 6, 7}`. Position 0 is our secret, the private key. We can hash it once to get position 1, hash again for position 2, and hash once more for position 3, and so on. Position 7, the end of the chain, is our public key.
+
+Going forward (0→1→2→3→4→5→6→7) is easy as we can just hash our secret n times. Going backwards, however, means inverting a hash function, which should be infeasible by that pesky one-way security property.
+
+To sign a message, we hash the message into a fixed-size digest and split it into 'chunks' of bits, with one chunk per chain of hashes in a single WOTS+ key pair. For this example, let's use 3-bit chunks to match our 8-position chain. *Note that the real published SLH-DSA scheme uses 4-bit chunks, meaning each chain actually has 16 positions.*
+
+<figure>
+  <img src="/writing/slh-dsa/fig-4-2-chunk-visualisation.png" alt="A message digest split into 3-bit chunks, with each chunk mapping to a position on its own hash chain." />
+  <figcaption>Figure 4.2: Chunk Visualization</figcaption>
+</figure>
+
+So in the example above:
+
+`Chunk 1 = 111 in binary = 7 in decimal`
+
+`Chunk 2 = 010 in binary = 2 in decimal`
+
+The chunk value in decimal (which varies by digest) becomes the revealed position on that chunk's chain. Say a chunk has a value of 2, this tells us "reveal position 2" on its chain. We publish the value at position 2, and anyone can verify by hashing forward along the chain and checking if the final value matches the public key. This verifies this chunk of our digest, which is just the hash of the message we want to sign.
+
+The flaw with this design as it is, is that forgery doesn't require inverting a hash, just walking forward along a chain you've already partially revealed. Reveal position 2, and an attacker can hash forward along the chain themselves; they just can't hash back along the chain, thanks to that one-way property once again.
+
+WOTS+ counters this with a checksum step that encodes how far you *didn't* walk, or the remaining steps we can make along the chain.
+
+`checksum = sum(max_position − chunk_value)`
+
+Forging a different message means walking some real chunk forward, which will always force the checksum backward. The checksum itself is then split into chunks like the message digest and signed on its own extra chains, so an attacker can't just forge it.
+
+This is a great solution, but WOTS+ is still strictly one-time use. Sign twice with the same key and we reveal two positions per chain instead of one, which could be enough to make a forgery feasible.
+
+### Merkle trees
+
+Merkle trees solve this one-time limit. We generate many WOTS+ key pairs, hash them together in pairs, then hash those pairs together, up to a single root. That root is now our one reusable public key.
+
+To sign, we simply pick an unused WOTS+ key, sign as before, and attach the sibling hashes needed to recompute the root (the "authentication path"). Verifying walks that path up and checks it matches the public key. The result is a single reusable root with many one-time keys underneath.
+
+### Hypertrees
+
+The next problem we run into is a space issue. A tree with enough 'leaves' (or WOTS+ signing keys) for signing is just too large to practically generate upfront. SLH-DSA's fix is a **hypertree**, or simply, a tree of smaller trees. Instead of one flat tree with millions of leaves, several smaller trees stack on top of each other, and each layer signs the root of the layer below it. With this approach, we only ever have to compute a thin slice of the whole hypertree structure.
+
+That solves size, but creates a tracking problem: which leaf, in which 'slice', have we used? If we mess up this record, with a bug, a restored backup, or a cloned VM, we can't prevent key reuse which could break the security of our scheme.
+
+### FORS
+
+**FORS** (a forest of random subsets) prevents this as the final design layer in SLH-DSA. It's a few-time scheme which tolerates a small, bounded amount of reuse. That tolerance lets SLH-DSA *derive* the leaf index from the message itself instead of tracking it. Eliminating the need for a choice record means no choice to get wrong, so FORS index collisions can happen but never become the catastrophic key reuse a stateful scheme risks.
+
+This is a pivotal design choice, and it's what turns SLH-DSA from something requiring perfect bookkeeping into something we can use like RSA or ECDSA. We can generate a key and sign anything, anytime, with no memory of past signatures required, up to the scheme's designed signing budget (FIPS 205 gives its security bounds for up to 2⁶⁴ signatures per key pair).
+
+All together the design looks like this:
+
+1. FORS signs the message digest
+2. WOTS+ signs the FORS public key and each subtree root above it
+3. A hypertree chains all of it up to a single small, reusable public key
+
+<figure>
+  <img src="/writing/slh-dsa/fig-4-3-slh-dsa-structure.png" alt="The SLH-DSA structure: FORS at the base signing the message digest, WOTS+ signing each layer above it, and a hypertree chaining up to a single reusable public key." />
+  <figcaption>Figure 4.3: Simple SLH-DSA Structure Overview</figcaption>
+</figure>
+
+---
+
+## Overview of SLH-DSA algorithms
+
+### KeyGen
+
+Key generation for SLH-DSA just samples a handful of random seeds, nothing actually gets built upfront. The one thing computed immediately is the top-layer root, which together with the public seed becomes the public key.
+
+`sk = { seed_secret, seed_prf, seed_public, root_of_top_layer }`
+
+`pk = { seed_public, root_of_top_layer }`
+
+Public keys are 32 bytes and private keys 64 bytes at the 128-bit level, scaling to 48/96 and 64/128 bytes at the 192- and 256-bit levels. They're also constant size no matter how deep the hypertree is.
+
+### Sign
+
+To sign, we derive a randomizer from `seed_prf` and the message, hash the two together into a digest, take the FORS index from that digest, sign with FORS, then sign upward through each hypertree layer, with each layer signing the root below it.
+
+`randomizer = PRF(seed_prf, message)`
+
+`digest, idx = hash(randomizer, seed_public, root_of_top_layer, message)`
+
+`fors_sig = FORS_sign(digest, idx)`
+
+`for each layer in hypertree:`
+
+`wots_sig, auth_path = WOTS_sign(layer_root_below)`
+
+`signature = { randomizer, fors_sig, [wots_sig + auth_path, ...] }`
+
+The public key material feeds into that hash so a signature is bound to one specific key pair. Without it, a signature valid under one public key could potentially be replayed as evidence against another, which matters when we are reasoning about many keys at once.
+
+### Verify
+
+To verify we run it backwards: we recompute the digest and index, rebuild the FORS public key, recompute each layer's root, and compare the final root to the public key. Each step is a beautifully simple hash-and-compare operation.
+
+---
+
+## Tradeoffs
+
+SLH-DSA signatures are approximately 7.8 KB to 17 KB in size at the 128-bit level, much larger than ~2.4 KB for ML-DSA. This gap alone is enough to render the scheme impractical for bandwidth-sensitive uses, like TLS for example. Signing also costs in the order of hundreds of thousands of hash calls per signature, which is just too slow for many signing cases, but less relevant for a use case like signing a firmware image once per release.
+
+What we pay for in bytes and cycles is statelessness. Stateful hash-based schemes such as XMSS and LMS require a perfect track record of which keys are used. Recall that a mistake in the key use record could lead to a key reuse with no warning and potentially breaking the security of the whole scheme. The statelessness of SLH-DSA eliminates that failure mode, at the cost of extra space and time.
+
+This was a great reason for NIST to standardize SLH-DSA, despite it not being efficient for many use cases. Think of it as a diversity pick, or 'insurance' against lattice cryptanalysis, built on a completely separate underlying hard problem.
+
+This extends to implementation risk as well: SLH-DSA has no risk of falling to rejection sampling or Gaussian sampling, which lattice scheme implementations could be exposed to. This isn't to say that SLH-DSA doesn't have vulnerabilities of its own such as timing or power side-channel attacks, but there is a certain reassurance in the simplicity of just hashing and comparing.
+
+---
+
+## Conclusion
+
+SLH-DSA is great where signatures are rare, verification is frequent, and the artifact itself is long-lived.
+
+Where it isn't as useful is use cases such as per-transaction blockchain signing, TLS, or anything throughput-bound. ML-DSA is a better default here, and SLH-DSA would be paying a large cost against a threat model that doesn't necessarily apply.
+
+As more cryptographic implementations get machine-generated and machine-reviewed, constant-time discipline and correct sampling are the properties generative AI still struggles to reliably verify.
+
+A scheme built from nothing but hashing has fewer of those traps to fall into. It's not cryptanalytically stronger, but its simplicity means that it does tend to be harder to implement badly.
+
+SLH-DSA buys us assumption diversity with its security resting on nothing but the foundational primitive that is hash functions, at the cost of bigger, slower signatures. But of course, the real answer for high-assurance systems isn't choosing one scheme, it's implementing them so a break in one assumption doesn't leave the whole system vulnerable. HAWK survived two years of expert review and fell in sixty hours, the lesson isn't that lattices are weak, it's that the gap between "well-studied" and "withdrawn" is getting shorter, and it's why crypto-agility is now more important than ever.
+
+---
+
+## References
+
+NIST, FIPS 205, Stateless Hash-Based Digital Signature Standard\
+[csrc.nist.gov/pubs/fips/205/final](https://csrc.nist.gov/pubs/fips/205/final)
+
+NIST, FIPS 204, Module-Lattice-Based Digital Signature Standard (ML-DSA)\
+[csrc.nist.gov/pubs/fips/204/final](https://csrc.nist.gov/pubs/fips/204/final)
+
+Bernstein, Hülsing, et al., SPHINCS+, Submission to the NIST Post-Quantum Cryptography Standardization Project\
+[sphincs.org](https://sphincs.org)
+
+Hülsing, W-OTS+, Shorter Signatures for Hash-Based Signature Schemes, ePrint 2017/965\
+[eprint.iacr.org/2017/965](https://eprint.iacr.org/2017/965)
+
+Bernstein, Hülsing, et al., The SPHINCS+ Signature Framework (ACM CCS 2019 / ePrint 2019/1086)\
+[eprint.iacr.org/2019/1086](https://eprint.iacr.org/2019/1086)
+
+Hülsing & Kudinov, Recovering the Tight Security Proof of SPHINCS+ (Asiacrypt 2022 / ePrint 2022/346)\
+[eprint.iacr.org/2022/346](https://eprint.iacr.org/2022/346)
+
+Bernstein & Hülsing, Decisional Second-Preimage Resistance: When Does SPR Imply PRE? (Asiacrypt 2019 / ePrint 2019/492)\
+[eprint.iacr.org/2019/492](https://eprint.iacr.org/2019/492)
+
+NIST PQC forum / third-round additional signatures page (for the HAWK withdrawal record)\
+[csrc.nist.gov/projects/pqc-dig-sig](https://csrc.nist.gov/projects/pqc-dig-sig)
+
+Simon, A Polynomial-Time Quantum Algorithm for the Dihedral Coset Problem [Preliminary Draft], ePrint 2026/1591\
+[eprint.iacr.org/2026/1591](https://eprint.iacr.org/2026/1591)
+
+Daniel Apon's LinkedIn post, Aug 10, personal assessment of ePrint 2026/1591\
+[linkedin.com](https://www.linkedin.com/feed/update/urn:li:activity:7492445359969964032/)
+
+Anthropic, research disclosure on the HAWK finding\
+[anthropic.com](https://www.anthropic.com/research/discovering-cryptographic-weaknesses)
+
+*Note: References exclude some hyperlinks throughout the text.*

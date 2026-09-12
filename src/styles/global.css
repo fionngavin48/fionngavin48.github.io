@@ -258,6 +258,9 @@ a.company-link:hover { color: var(--accent); }
   border: 1px solid var(--border);
 }
 .prose img { max-width: 100%; height: auto; border-radius: 8px; }
+.prose figure { margin: 1.6em 0; text-align: center; }
+.prose figure img { display: block; margin: 0 auto; }
+.prose figcaption { margin-top: .6em; font-size: .85rem; color: var(--muted); }
 .prose table { width: 100%; border-collapse: collapse; font-size: .9rem; }
 .prose th, .prose td { padding: .6em .9em; border: 1px solid var(--border); text-align: left; }
 .prose th { background: var(--surface); font-weight: 600; }
@@ -301,6 +304,45 @@ a.company-link:hover { color: var(--accent); }
 
 .article-prose > p:first-of-type {
   color: var(--muted);
+}
+
+/* ---------- table of contents ---------- */
+.prose .toc { margin: 1.4em 0 2em; }
+.toc-label {
+  font-family: var(--font-mono);
+  font-size: .72rem;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--subtle);
+  cursor: pointer;
+  list-style: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  user-select: none;
+  transition: color .15s ease;
+}
+.toc-label::-webkit-details-marker { display: none; }
+.toc-label::before {
+  content: '▸';
+  font-size: .7em;
+  transition: transform .15s ease;
+}
+.toc[open] > .toc-label::before { transform: rotate(90deg); }
+.toc-label:hover { color: var(--accent); }
+.prose .toc-list {
+  list-style: none;
+  margin: 10px 0 0;
+  padding-left: 1.1em;
+  font-size: .92rem;
+  line-height: 1.75;
+}
+.prose .toc-list li + li { margin-top: 0; }
+.toc-list a { color: var(--muted); transition: color .15s ease; }
+.toc-list a:hover { color: var(--accent); }
+
+@media (prefers-reduced-motion: no-preference) {
+  html { scroll-behavior: smooth; }
 }
 
 /* ---------- footer ---------- */

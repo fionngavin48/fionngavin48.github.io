@@ -1,0 +1,26 @@
+---
+import type { MarkdownHeading } from 'astro';
+
+interface Props {
+  headings?: MarkdownHeading[];
+}
+
+const { headings = [] } = Astro.props;
+// Top-level sections only; h3s would make the longer articles unwieldy.
+const sections = headings.filter((h) => h.depth === 2);
+---
+
+{
+  sections.length > 1 && (
+    <details class="toc">
+      <summary class="toc-label">Contents</summary>
+      <ul class="toc-list">
+        {sections.map((h) => (
+          <li>
+            <a href={`#${h.slug}`}>{h.text}</a>
+          </li>
+        ))}
+      </ul>
+    </details>
+  )
+}

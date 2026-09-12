@@ -9,7 +9,7 @@ export async function getStaticPaths() {
 }
 
 const { post } = Astro.props;
-const { Content } = await render(post);
+const { Content, headings } = await render(post);
 
 const byline = [
   post.data.author,
@@ -26,7 +26,7 @@ const byline = [
       <div class="article-meta">{byline}</div>
     </header>
     <div class="prose article-prose">
-      <Content />
+      <Content headings={headings} />
     </div>
     <a class="back-link back-link-bottom" href="/writing/">← writing</a>
   </article>
